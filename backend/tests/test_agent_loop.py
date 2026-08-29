@@ -43,7 +43,7 @@ async def test_second_shift_does_not_drop_holds() -> None:
     await run_shift("first", force_mock=True)
     second = await run_shift("second", force_mock=True)
     assert second.status == "completed"
-    assert second.counts["processed"] == 0
+    assert second.counts["processed"] == 10
     still = store.list_cases()
     assert len(still) == 10
     assert all(c.status == "hold" for c in still)

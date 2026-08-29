@@ -22,9 +22,9 @@ The Taskmaster
 
 Night Desk stamps hold receipts on an overnight refund / loyalty / payment-abuse review dump. It is not a chatbot and not a shrinking inbox.
 
-A goal starts a shift. Tools pull case, device graph, velocity, loyalty, delivery, ATO. Gemini 3.5 via Google ADK writes the note only. `decide()` then stamps the receipt: `{HOLD|ESCALATE}: {policy reason}`. Evidence is the facts that fired (device_ring, bonuses, fails/BINs, INR+POD, ATO) — not the narrative. If Gemini disagrees, the receipt shows the override.
+First-open is seeded hold receipts — why + present/missing — without calling Vertex. A live shift (`POST /api/shifts`) is off unless `SHIFT_TOKEN` is set; the public UI has no button that bills Vertex. Tools pull case, device graph, velocity, loyalty, delivery, ATO. Gemini 3.5 via Google ADK writes the note only. `decide()` then stamps the receipt: `{HOLD|ESCALATE}: {policy reason}`. Evidence is the facts that fired (device_ring, bonuses, fails/BINs, INR+POD, ATO) — not the narrative. If Gemini disagrees, the receipt shows the override.
 
-If Vertex, Gemini, or Pub/Sub is down, every case HOLDs. First-open is that receipt, still on the row, with why + present/missing. There is no AUTO_CLOSE.
+If Vertex, Gemini, or Pub/Sub is down, every case HOLDs. There is no AUTO_CLOSE.
 
 ## Features and functionality
 

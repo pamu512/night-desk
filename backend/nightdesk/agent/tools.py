@@ -25,9 +25,9 @@ def _emit(kind: str, message: str, data: dict | None = None) -> None:
 
 
 def list_open_cases() -> dict[str, Any]:
-    """List every OPEN case in the overnight queue with id, title, amount, typology."""
-    cases = store.list_cases(status="open")
-    _emit("tool", f"list_open_cases → {len(cases)} open", {"count": len(cases)})
+    """List every case in the overnight queue with id, title, amount, typology."""
+    cases = store.list_cases()
+    _emit("tool", f"list_open_cases → {len(cases)} in queue", {"count": len(cases)})
     return {
         "count": len(cases),
         "cases": [

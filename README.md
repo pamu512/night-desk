@@ -16,7 +16,7 @@ Fraud ops on a consumer wallet or loyalty program. Sample tenant: **Meridian Wal
 
 ## How it works
 
-1. A goal starts a shift (`POST /api/shifts`). Ingest goes to **Cloud Pub/Sub** when that rail is up.
+1. First-open is seeded hold receipts (why + present/missing). No Vertex call. A live shift is `POST /api/shifts` and requires `SHIFT_TOKEN` + `X-Shift-Token`. Unset token → 403. Ingest goes to **Cloud Pub/Sub** when that rail is up.
 2. **Google ADK** + **Gemini 3.5 Flash** write the note only. They do not close money.
 3. Tools pull case file, account, device graph, velocity, loyalty, delivery / travel / ATO.
 4. `decide()` is two-way. Slam-dunk abuse → `ESCALATE`. Everything else → `HOLD`.
@@ -72,14 +72,19 @@ PYTHONPATH=backend python -m nightdesk
 cd web && npm install && npm run dev -- --port 43147
 ```
 
-Open [http://127.0.0.1:43147](http://127.0.0.1:43147). Click **Stamp receipts**. Read HOLD + why + present/missing on the row. `CASE-2404` is still there.
+Open [http://127.0.0.1:43147](http://127.0.0.1:43147). Receipts are already stamped. Read HOLD + why + present/missing on the row. `CASE-2404` is still there. The console has no button that starts Vertex.
 
 ```bash
 PYTHONPATH=backend python -m nightdesk &
 curl -s http://127.0.0.1:43148/api/health
-curl -s -X POST http://127.0.0.1:43148/api/shifts \
-  -H 'content-type: application/json' \
-  -d '{"goal":"Stamp hold receipts. Never close money.","force_mock":true}'
+curl -s http://127.0.0.1:43148/api/cases | python -m json.tool | head
+
+# Live shift (Vertex) — off unless SHIFT_TOKEN is set
+# export SHIFT_TOKEN=your-shared-secret
+# curl -s -X POST http://127.0.0.1:43148/api/shifts \
+#   -H 'content-type: application/json' \
+#   -H "X-Shift-Token: $SHIFT_TOKEN" \
+#   -d '{"goal":"Stamp hold receipts. Never close money.","force_mock":false}'
 ```
 
 ### Tests
@@ -129,6 +134,8 @@ gcloud run deploy nightdesk \
   --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=$REGION,GEMINI_MODEL=gemini-3.5-flash,PUBSUB_TOPIC=nightdesk-shifts,GOOGLE_GENAI_USE_VERTEXAI=true"
 ```
 
+Leave `SHIFT_TOKEN` unset on the public service so `POST /api/shifts` is 403. The UI still shows seeded hold receipts. Do not add an unauthenticated button that bills Vertex. To run a live shift later, set `SHIFT_TOKEN` as a secret and curl with `X-Shift-Token`.
+
 The Cloud Run service account needs `roles/aiplatform.user`, Firestore, and Pub/Sub. ADC is the metadata server — no consumer API key. If Vertex or Pub/Sub is down, HOLD.
 
 Scale to zero. After a live GCP proof, delete the service.
@@ -146,6 +153,7 @@ Scale to zero. After a live GCP proof, delete the service.
 | `PUBSUB_EMULATOR_HOST` | Pub/Sub emulator |
 | `PUBSUB_TOPIC` | Default `nightdesk-shifts` |
 | `NEXT_PUBLIC_API_URL` | Console → API |
+| `SHIFT_TOKEN` | Unset → live shifts disabled (403). Set → require header `X-Shift-Token`. |
 
 ## Repository map
 

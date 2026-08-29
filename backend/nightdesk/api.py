@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -8,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +19,7 @@ from nightdesk import config
 from nightdesk.events import bus
 from nightdesk.ingest import pubsub_live
 from nightdesk.rails import assess_rails
-from nightdesk.seed import reset_queue
+from nightdesk.seed import ensure_seeded, reset_queue
 from nightdesk.store import store
 
 log = logging.getLogger("nightdesk.api")
@@ -32,9 +33,9 @@ async def lifespan(_app: FastAPI):
         existing = store.list_cases()
     except Exception:
         existing = []
-    if not existing:
-        reset_queue()
-        log.info("Seeded sample queue")
+    if not existing or any(c.note is None for c in existing):
+        ensure_seeded()
+        log.info("Seeded hold receipts (no Vertex)")
     yield
 
 
@@ -47,6 +48,16 @@ app.add_middleware(
 )
 
 _shift_tasks: dict[str, asyncio.Task[None]] = {}
+
+
+def require_shift_token(x_shift_token: str | None = Header(default=None)) -> None:
+    """Live shifts and reseeds spend Vertex/Pub/Sub. Off unless SHIFT_TOKEN matches."""
+    token = config.shift_token()
+    if not token:
+        raise HTTPException(403, "Live shifts disabled. Set SHIFT_TOKEN to enable.")
+    provided = (x_shift_token or "").strip()
+    if not provided or not hmac.compare_digest(provided, token):
+        raise HTTPException(403, "Invalid or missing X-Shift-Token")
 
 
 class ShiftRequest(BaseModel):
@@ -77,6 +88,7 @@ def health() -> dict[str, Any]:
             "missing": rails.missing,
             "ok": rails.ok,
         },
+        "shifts": {"enabled": config.shifts_enabled()},
     }
 
 
@@ -137,7 +149,11 @@ async def shift_events(shift_id: str) -> StreamingResponse:
 
 
 @app.post("/api/shifts")
-async def start_shift(body: ShiftRequest) -> dict[str, Any]:
+async def start_shift(
+    body: ShiftRequest,
+    x_shift_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    require_shift_token(x_shift_token)
     from nightdesk.agent.shift import open_shift, run_shift
 
     shift = open_shift(body.goal, force_mock=body.force_mock)
@@ -158,7 +174,8 @@ def resolve_case(case_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/reset")
-def reset() -> dict[str, Any]:
+def reset(x_shift_token: str | None = Header(default=None)) -> dict[str, Any]:
+    require_shift_token(x_shift_token)
     cases = reset_queue()
     return {"ok": True, "cases": len(cases)}
 

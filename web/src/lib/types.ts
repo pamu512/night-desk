@@ -73,4 +73,5 @@ export type Health = {
   project: string;
   pubsub_topic: string;
   rails: { present: string[]; missing: string[]; ok: boolean };
+  shifts: { enabled: boolean };
 };

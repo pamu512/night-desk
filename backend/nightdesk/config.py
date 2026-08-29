@@ -45,3 +45,12 @@ def has_gemini() -> bool:
     """Vertex + ADC. A project id or consumer API key does not mark the rail up."""
     return use_vertex() and has_adc()
 
+
+def shift_token() -> str:
+    """Shared secret for live shifts. Empty means POST /api/shifts is disabled."""
+    return (os.getenv("SHIFT_TOKEN") or "").strip()
+
+
+def shifts_enabled() -> bool:
+    return bool(shift_token())
+

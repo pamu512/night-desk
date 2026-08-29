@@ -1,41 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { dispClass, money, statusClass, statusLabel, typologyLabel } from "@/lib/labels";
-import type { CaseRecord, Health, ShiftRecord, TraceEvent } from "@/lib/types";
+import type { CaseRecord, Health } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-
-const DEFAULT_GOAL =
-  "Stamp a hold receipt on every case. Escalate only slam-dunk abuse when Gemini/Vertex and Pub/Sub are up. Never close money.";
-
-function kindColor(kind: TraceEvent["kind"]): string {
-  return (
-    {
-      plan: "text-sky-300",
-      tool: "text-zinc-300",
-      note: "text-lime-300",
-      disposition: "text-amber-200",
-      policy: "text-violet-300",
-      info: "text-zinc-400",
-      error: "text-orange-400",
-    }[kind] || "text-zinc-400"
-  );
-}
 
 export default function DeskPage() {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [cases, setCases] = useState<CaseRecord[]>([]);
-  const [goal, setGoal] = useState(DEFAULT_GOAL);
-  const [running, setRunning] = useState(false);
-  const [shift, setShift] = useState<ShiftRecord | null>(null);
-  const [events, setEvents] = useState<TraceEvent[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const traceRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -54,64 +30,13 @@ export default function DeskPage() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  useEffect(() => {
-    if (traceRef.current) {
-      traceRef.current.scrollTop = traceRef.current.scrollHeight;
-    }
-  }, [events]);
-
   const selected = useMemo(
     () => cases.find((c) => c.id === selectedId) || null,
     [cases, selectedId],
   );
 
-  const unstamped = cases.filter((c) => c.status === "open").length;
   const holds = cases.filter((c) => c.final_disposition === "HOLD").length;
   const escalated = cases.filter((c) => c.final_disposition === "ESCALATE").length;
-
-  async function startShift() {
-    setBusy(true);
-    setEvents([]);
-    setRunning(true);
-    try {
-      const started = await api.startShift(goal, !health?.gemini);
-      setShift(started);
-      const es = new EventSource(api.eventsUrl(started.id));
-      es.onmessage = (msg) => {
-        const ev = JSON.parse(msg.data) as TraceEvent;
-        setEvents((prev) => [...prev, ev]);
-      };
-      es.addEventListener("done", () => {
-        es.close();
-        setRunning(false);
-        void refresh();
-        void api.shift(started.id).then(setShift);
-      });
-      es.onerror = () => {
-        es.close();
-        setRunning(false);
-        void refresh();
-      };
-    } catch (err) {
-      setRunning(false);
-      setHealthError(err instanceof Error ? err.message : "shift failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resetQueue() {
-    setBusy(true);
-    try {
-      await api.reset();
-      setEvents([]);
-      setShift(null);
-      setSelectedId(null);
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -130,6 +55,9 @@ export default function DeskPage() {
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {healthError && (
             <Badge className="bg-orange-950 text-orange-300">API: {healthError}</Badge>
+          )}
+          {health && !health.shifts?.enabled && (
+            <Badge className="bg-zinc-800 text-zinc-400">live shifts off</Badge>
           )}
           {health?.rails && (
             <>
@@ -152,22 +80,12 @@ export default function DeskPage() {
         <section className="flex flex-col gap-4 lg:col-span-4">
           <Card className="p-4">
             <p className="text-xs font-mono uppercase tracking-widest text-zinc-500">
-              Goal
+              First-open
             </p>
-            <textarea
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              rows={4}
-              className="mt-2 w-full resize-none rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm leading-relaxed text-zinc-200 outline-none focus:border-lime-400"
-            />
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button onClick={() => void startShift()} disabled={busy || running || unstamped === 0}>
-                {running ? "Stamping receipts…" : "Stamp receipts"}
-              </Button>
-              <Button variant="outline" onClick={() => void resetQueue()} disabled={busy || running}>
-                Reseed sample cases
-              </Button>
-            </div>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-200">
+              Seeded hold receipts. Why and present/missing are already on each
+              row. This page does not start a live shift and does not call Vertex.
+            </p>
             <p className="mt-3 text-xs leading-relaxed text-zinc-500">
               Gemini writes the note. <code>decide()</code> stamps HOLD or
               ESCALATE. Missing Gemini, Vertex, or Pub/Sub fails closed to HOLD.
@@ -179,38 +97,6 @@ export default function DeskPage() {
             <Stat label="HOLD" value={holds} hint="receipts that stay" accent />
             <Stat label="ESCALATE" value={escalated} hint="slam-dunk only" />
           </div>
-
-          <Card className="flex min-h-[280px] flex-1 flex-col overflow-hidden">
-            <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2">
-              <p className="text-xs font-mono uppercase tracking-widest text-zinc-500">
-                Agent trace
-              </p>
-              {shift && (
-                <span className="font-mono text-[11px] text-zinc-500">
-                  {shift.id} · {shift.engine}
-                </span>
-              )}
-            </div>
-            <div ref={traceRef} className="flex-1 overflow-y-auto px-4 py-3">
-              {events.length === 0 ? (
-                <p className="text-sm text-zinc-500">
-                  {healthError
-                    ? "Start the API (`python -m nightdesk`) and refresh."
-                    : "Idle. Stamp receipts to watch the guard hold."}
-                </p>
-              ) : (
-                <ol className="space-y-2">
-                  {events.map((ev, i) => (
-                    <li key={`${ev.ts}-${i}`} className="font-mono text-[11px] leading-snug">
-                      <span className="text-zinc-600">{ev.ts.slice(11, 19)}</span>{" "}
-                      <span className="text-zinc-500">{ev.agent}</span>{" "}
-                      <span className={kindColor(ev.kind)}>{ev.message}</span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          </Card>
         </section>
 
         <section className="flex flex-col gap-4 lg:col-span-8">
@@ -219,8 +105,12 @@ export default function DeskPage() {
           </p>
           <div className="grid gap-4 xl:grid-cols-2">
             <Card className="overflow-hidden">
-              {cases.length === 0 ? (
-                <div className="p-6 text-sm text-zinc-500">No cases. Reseed the sample queue.</div>
+              {healthError && cases.length === 0 ? (
+                <div className="p-6 text-sm text-zinc-500">
+                  API unreachable. Start it with <code>python -m nightdesk</code>.
+                </div>
+              ) : cases.length === 0 ? (
+                <div className="p-6 text-sm text-zinc-500">Loading seeded receipts…</div>
               ) : (
                 <ul className="divide-y divide-zinc-800">
                   {cases.map((c) => (
@@ -342,7 +232,7 @@ function ReceiptDetail({ case: c }: { case: CaseRecord }) {
           )}
         </div>
       ) : (
-        <p className="text-sm text-zinc-500">No receipt yet — stamp the shift.</p>
+        <p className="text-sm text-zinc-500">No receipt yet — seed is still loading.</p>
       )}
     </div>
   );

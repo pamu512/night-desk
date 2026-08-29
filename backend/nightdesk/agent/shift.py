@@ -76,8 +76,8 @@ def open_shift(goal: str, *, force_mock: bool = False) -> ShiftRecord:
     shift_id = f"shift-{uuid.uuid4().hex[:10]}"
     use_gemini = config.has_gemini() and not force_mock
     engine = f"adk+{config.GEMINI_MODEL}" if use_gemini else "receipt-stamp"
-    open_cases = store.list_cases(status="open")
-    case_ids = [c.id for c in open_cases]
+    queue = store.list_cases()
+    case_ids = [c.id for c in queue]
     message_id = publish_shift_started(shift_id, goal, case_ids)
     rails = assess_rails(pubsub_up=message_id is not None, gemini_up=use_gemini)
     shift = ShiftRecord(
