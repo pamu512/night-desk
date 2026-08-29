@@ -8,7 +8,7 @@ Hold receipts for refund, loyalty, and payment-abuse review. Two-way only: **HOL
 
 You give it a goal. It gathers device / loyalty / velocity context. Gemini (when the rail is up) writes a draft note. `decide()` stamps the receipt: `{HOLD|ESCALATE}: {reason}`, evidence = the facts that fired (device_ring, bonuses, fails/BINs, INR+POD, ATO). If Gemini, Vertex, or Pub/Sub is down, every case **HOLD**s. First-open is that receipt — why + present/missing — still on the row. Nothing leaves the pile.
 
-![Architecture](docs/architecture.svg)
+![Architecture](docs/architecture.png)
 
 ## Who it's for
 
@@ -44,7 +44,7 @@ Ops console (Next.js) ──► FastAPI on Cloud Run
                               └─ Cloud Pub/Sub    (shift-started; down → HOLD)
 ```
 
-Diagram: [`docs/architecture.svg`](docs/architecture.svg).
+Vector source: [`docs/architecture.svg`](docs/architecture.svg).
 
 ### Required stack (hackathon)
 
@@ -162,7 +162,8 @@ sample_data/cases.json     sample overnight cases (no secrets)
 backend/nightdesk/         FastAPI + ADK + decide() + Firestore/Pub/Sub
 backend/tests/             cannot-close, fail-closed, note stamp
 web/                       hold-receipt console
-docs/architecture.svg
+docs/architecture.png        architecture diagram (GitHub README)
+docs/architecture.svg        vector source
 DEMO.md
 Dockerfile
 ```
