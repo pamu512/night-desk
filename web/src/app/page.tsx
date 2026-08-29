@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 const DEFAULT_GOAL =
-  "Clear the overnight refund, loyalty, and payment-abuse queue. Write a case note on every open case. Queue only the real decisions for a human.";
+  "Stamp a hold receipt on every case. Escalate only slam-dunk abuse when Gemini/Vertex and Pub/Sub are up. Never close money.";
 
 function kindColor(kind: TraceEvent["kind"]): string {
   return (
@@ -34,9 +34,7 @@ export default function DeskPage() {
   const [shift, setShift] = useState<ShiftRecord | null>(null);
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"inbox" | "all">("all");
   const [busy, setBusy] = useState(false);
-  const [resolveNote, setResolveNote] = useState("");
   const traceRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
@@ -67,18 +65,9 @@ export default function DeskPage() {
     [cases, selectedId],
   );
 
-  const counts = useMemo(() => {
-    const by = (s: CaseRecord["status"]) => cases.filter((c) => c.status === s).length;
-    return {
-      open: by("open"),
-      human: by("human_queue"),
-      closed: by("auto_closed"),
-      escalated: by("auto_escalated"),
-      resolved: by("resolved"),
-    };
-  }, [cases]);
-
-  const visible = cases.filter((c) => (tab === "inbox" ? c.status === "human_queue" : true));
+  const unstamped = cases.filter((c) => c.status === "open").length;
+  const holds = cases.filter((c) => c.final_disposition === "HOLD").length;
+  const escalated = cases.filter((c) => c.final_disposition === "ESCALATE").length;
 
   async function startShift() {
     setBusy(true);
@@ -124,18 +113,6 @@ export default function DeskPage() {
     }
   }
 
-  async function resolve(action: "close" | "escalate") {
-    if (!selected) return;
-    setBusy(true);
-    try {
-      await api.resolve(selected.id, action, resolveNote);
-      setResolveNote("");
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3 md:px-6">
@@ -144,27 +121,28 @@ export default function DeskPage() {
             <span className="text-xs font-mono uppercase tracking-[0.2em] text-lime-300">
               Night Desk
             </span>
-            <Badge className="bg-zinc-800 text-zinc-400">Taskmaster</Badge>
+            <Badge className="bg-zinc-800 text-zinc-400">HOLD / ESCALATE</Badge>
           </div>
           <p className="mt-0.5 text-sm text-zinc-400">
-            Meridian Wallet · overnight refund / loyalty / payment-abuse queue
+            Hold receipts for refund, loyalty, and payment-abuse review
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {healthError && (
             <Badge className="bg-orange-950 text-orange-300">API: {healthError}</Badge>
           )}
-          {health && (
+          {health?.rails && (
             <>
-              <Badge className={health.gemini ? "bg-lime-950 text-lime-300" : "bg-zinc-800 text-zinc-400"}>
-                {health.gemini ? `Gemini ${health.model}` : "Planner (no Gemini key)"}
-              </Badge>
-              <Badge className="bg-zinc-800 text-zinc-400">
-                store {health.store}
-              </Badge>
-              <Badge className="bg-zinc-800 text-zinc-400">
-                {health.project}
-              </Badge>
+              {(health.rails.present.length ? health.rails.present : []).map((r) => (
+                <Badge key={r} className="bg-lime-950 text-lime-300">
+                  {r} present
+                </Badge>
+              ))}
+              {health.rails.missing.map((r) => (
+                <Badge key={r} className="bg-amber-950 text-amber-200">
+                  {r} missing
+                </Badge>
+              ))}
             </>
           )}
         </div>
@@ -183,25 +161,23 @@ export default function DeskPage() {
               className="mt-2 w-full resize-none rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm leading-relaxed text-zinc-200 outline-none focus:border-lime-400"
             />
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button onClick={() => void startShift()} disabled={busy || running || counts.open === 0}>
-                {running ? "Working the queue…" : "Run night shift"}
+              <Button onClick={() => void startShift()} disabled={busy || running || unstamped === 0}>
+                {running ? "Stamping receipts…" : "Stamp receipts"}
               </Button>
               <Button variant="outline" onClick={() => void resetQueue()} disabled={busy || running}>
                 Reseed sample cases
               </Button>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-zinc-500">
-              The agent plans, pulls device/loyalty/velocity context, writes a
-              case note, then a policy guard decides. Only ambiguous or
-              high-value cases land in the human inbox.
+              Gemini writes the note. <code>decide()</code> stamps HOLD or
+              ESCALATE. Missing Gemini, Vertex, or Pub/Sub fails closed to HOLD.
+              Nothing leaves this list. Money is never closed unattended.
             </p>
           </Card>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
-            <Stat label="Open" value={counts.open} hint="still in queue" />
-            <Stat label="Human inbox" value={counts.human} hint="your morning list" accent />
-            <Stat label="Auto-closed" value={counts.closed} hint="benign" />
-            <Stat label="Auto-escalated" value={counts.escalated} hint="confirmed abuse" />
+          <div className="grid grid-cols-2 gap-2">
+            <Stat label="HOLD" value={holds} hint="receipts that stay" accent />
+            <Stat label="ESCALATE" value={escalated} hint="slam-dunk only" />
           </div>
 
           <Card className="flex min-h-[280px] flex-1 flex-col overflow-hidden">
@@ -220,7 +196,7 @@ export default function DeskPage() {
                 <p className="text-sm text-zinc-500">
                   {healthError
                     ? "Start the API (`python -m nightdesk`) and refresh."
-                    : "Idle. Run a night shift to watch the agent work the queue."}
+                    : "Idle. Stamp receipts to watch the guard hold."}
                 </p>
               ) : (
                 <ol className="space-y-2">
@@ -238,32 +214,16 @@ export default function DeskPage() {
         </section>
 
         <section className="flex flex-col gap-4 lg:col-span-8">
-          <div className="flex items-center gap-2">
-            <Button
-              variant={tab === "all" ? "default" : "ghost"}
-              onClick={() => setTab("all")}
-            >
-              All cases ({cases.length})
-            </Button>
-            <Button
-              variant={tab === "inbox" ? "default" : "ghost"}
-              onClick={() => setTab("inbox")}
-            >
-              Human inbox ({counts.human})
-            </Button>
-          </div>
-
+          <p className="text-xs font-mono uppercase tracking-widest text-zinc-500">
+            Hold receipts · {cases.length} stay put
+          </p>
           <div className="grid gap-4 xl:grid-cols-2">
             <Card className="overflow-hidden">
-              {visible.length === 0 ? (
-                <div className="p-6 text-sm text-zinc-500">
-                  {tab === "inbox"
-                    ? "Inbox empty. Either the shift has not run, or every case was auto-acted."
-                    : "No cases. Reseed the sample queue."}
-                </div>
+              {cases.length === 0 ? (
+                <div className="p-6 text-sm text-zinc-500">No cases. Reseed the sample queue.</div>
               ) : (
                 <ul className="divide-y divide-zinc-800">
-                  {visible.map((c) => (
+                  {cases.map((c) => (
                     <li key={c.id}>
                       <button
                         type="button"
@@ -274,12 +234,24 @@ export default function DeskPage() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-mono text-xs text-zinc-500">{c.id}</span>
-                          <Badge className={statusClass(c.status)}>{statusLabel(c.status)}</Badge>
+                          <Badge className={c.final_disposition ? dispClass(c.final_disposition) : statusClass(c.status)}>
+                            {c.final_disposition || statusLabel(c.status)}
+                          </Badge>
                         </div>
                         <p className="text-sm text-zinc-100">{c.title}</p>
-                        <p className="text-xs text-zinc-500">
-                          {money(c.amount_usd)} · {typologyLabel(c.typology)}
-                        </p>
+                        {c.note ? (
+                          <>
+                            <p className="text-xs text-amber-200">{c.note.why_human}</p>
+                            <p className="text-[11px] text-zinc-500">
+                              present {c.note.present.join(", ") || "—"} · missing{" "}
+                              {c.note.missing.join(", ") || "—"}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-xs text-zinc-500">
+                            {money(c.amount_usd)} · {typologyLabel(c.typology)}
+                          </p>
+                        )}
                       </button>
                     </li>
                   ))}
@@ -290,17 +262,11 @@ export default function DeskPage() {
             <Card className="p-4">
               {!selected ? (
                 <p className="text-sm text-zinc-500">
-                  Select a case. After a shift, open the human inbox — those
-                  two are the only decisions that should have reached you.
+                  First-open is a HOLD that stays. Open a row for the stamped
+                  receipt — why, present, missing. Gemini never AUTO_CLOSE.
                 </p>
               ) : (
-                <CaseDetail
-                  case={selected}
-                  resolveNote={resolveNote}
-                  setResolveNote={setResolveNote}
-                  onResolve={resolve}
-                  busy={busy}
-                />
+                <ReceiptDetail case={selected} />
               )}
             </Card>
           </div>
@@ -332,84 +298,51 @@ function Stat({
   );
 }
 
-function CaseDetail({
-  case: c,
-  resolveNote,
-  setResolveNote,
-  onResolve,
-  busy,
-}: {
-  case: CaseRecord;
-  resolveNote: string;
-  setResolveNote: (v: string) => void;
-  onResolve: (a: "close" | "escalate") => void;
-  busy: boolean;
-}) {
-  const account = c.account as { email?: string; age_days?: number; loyalty_tier?: string };
+function ReceiptDetail({ case: c }: { case: CaseRecord }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-xs text-zinc-500">{c.id}</span>
-        <Badge className={statusClass(c.status)}>{statusLabel(c.status)}</Badge>
         {c.final_disposition && (
           <Badge className={dispClass(c.final_disposition)}>{c.final_disposition}</Badge>
         )}
-        {c.policy_override && (
-          <Badge className="bg-violet-950 text-violet-200">policy override</Badge>
+        {c.note?.override && (
+          <Badge className="bg-violet-950 text-violet-200">guard overrode Gemini</Badge>
         )}
       </div>
       <h2 className="text-lg font-medium leading-snug">{c.title}</h2>
-      <p className="text-sm text-zinc-400">{c.narrative}</p>
       <p className="text-xs text-zinc-500">
-        {money(c.amount_usd)} · {c.channel} · {account.email} · tenure {account.age_days}d ·{" "}
-        {account.loyalty_tier}
+        {money(c.amount_usd)} · {typologyLabel(c.typology)}
       </p>
-      <div className="flex flex-wrap gap-1">
-        {c.rule_hits.map((h) => (
-          <Badge key={h} className="bg-zinc-800 text-zinc-400">
-            {h}
-          </Badge>
-        ))}
-      </div>
       {c.note ? (
         <div className="rounded-md border border-zinc-800 bg-zinc-950 p-3">
           <p className="text-xs font-mono uppercase tracking-widest text-lime-300">
-            Case note
+            Receipt
           </p>
           <p className="mt-2 text-sm leading-relaxed text-zinc-200">{c.note.summary}</p>
-          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-zinc-400">
-            {c.note.evidence.map((e) => (
-              <li key={e}>{e}</li>
-            ))}
-          </ul>
-          {c.note.why_human && (
-            <p className="mt-2 text-xs text-amber-200">Why human: {c.note.why_human}</p>
-          )}
-          <p className="mt-2 font-mono text-[11px] text-zinc-600">
-            agent {c.agent_recommended} · confidence {c.note.confidence.toFixed(2)}
+          <p className="mt-2 text-xs text-amber-200">Why: {c.note.why_human}</p>
+          <p className="mt-2 text-xs text-zinc-400">
+            present: {c.note.present.join(", ") || "—"}
           </p>
+          <p className="text-xs text-zinc-500">
+            missing: {c.note.missing.join(", ") || "—"}
+          </p>
+          {c.note.evidence.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-zinc-400">
+              {c.note.evidence.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+            </ul>
+          )}
+          {c.note.override && c.note.gemini_recommended && (
+            <p className="mt-2 font-mono text-[11px] text-violet-300">
+              Gemini drafted {c.note.gemini_recommended}; decide() kept{" "}
+              {c.note.recommended}.
+            </p>
+          )}
         </div>
       ) : (
-        <p className="text-sm text-zinc-500">No note yet — run the night shift.</p>
-      )}
-      {c.status === "human_queue" && (
-        <div className="space-y-2 border-t border-zinc-800 pt-3">
-          <textarea
-            value={resolveNote}
-            onChange={(e) => setResolveNote(e.target.value)}
-            placeholder="Optional analyst addendum"
-            rows={2}
-            className="w-full resize-none rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-lime-400"
-          />
-          <div className="flex gap-2">
-            <Button variant="outline" disabled={busy} onClick={() => onResolve("close")}>
-              Close as benign
-            </Button>
-            <Button variant="danger" disabled={busy} onClick={() => onResolve("escalate")}>
-              Escalate
-            </Button>
-          </div>
-        </div>
+        <p className="text-sm text-zinc-500">No receipt yet — stamp the shift.</p>
       )}
     </div>
   );

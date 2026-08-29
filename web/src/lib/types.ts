@@ -1,20 +1,19 @@
-export type Disposition = "AUTO_CLOSE" | "AUTO_ESCALATE" | "HUMAN_QUEUE";
+export type Disposition = "HOLD" | "ESCALATE";
 
-export type CaseStatus =
-  | "open"
-  | "processing"
-  | "auto_closed"
-  | "auto_escalated"
-  | "human_queue"
-  | "resolved";
+export type CaseStatus = "open" | "processing" | "hold" | "escalated";
 
 export type CaseNote = {
   summary: string;
   typology: string;
   evidence: string[];
   recommended: Disposition;
+  why_human: string;
+  present: string[];
+  missing: string[];
+  gemini_summary?: string | null;
+  gemini_recommended?: Disposition | null;
+  override: boolean;
   confidence: number;
-  why_human?: string | null;
 };
 
 export type CaseRecord = {
@@ -60,6 +59,7 @@ export type ShiftRecord = {
   store_backend: string;
   counts: Record<string, number>;
   case_ids: string[];
+  rails: { present: string[]; missing: string[]; ok: boolean } | null;
   error: string | null;
 };
 
@@ -72,4 +72,5 @@ export type Health = {
   store_fallback: string | null;
   project: string;
   pubsub_topic: string;
+  rails: { present: string[]; missing: string[]; ok: boolean };
 };

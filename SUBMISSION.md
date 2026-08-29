@@ -1,6 +1,6 @@
 # Devpost submission copy
 
-Paste into the All Things Agentic form. Repo must be public (or shared with testing@devpost.com and cloudhackathons@google.com).
+Do not file until the owner says so. Repo: https://github.com/pamu512/night-desk
 
 ## Project name
 
@@ -8,31 +8,33 @@ Night Desk
 
 ## Tagline
 
-The night shift for refund, loyalty, and payment-abuse queues.
+The guard that holds. HOLD or ESCALATE — never close money unattended.
 
 ## Track
 
 The Taskmaster
 
+## Toll
+
+**Demo runtime is Gemini 3.5 + ADK + GCP; Night Desk is a transferable skill on the buyer’s BYOM/VPC — not a hosted agent seat or a case CRM.**
+
 ## Text description
 
-Night Desk is an autonomous overnight case-triage agent for fraud ops. A consumer wallet (sample tenant: Meridian) dumps a `REVIEW` pile every night — serial refunds, welcome-bonus farms, card testing, friendly-fraud INR claims, the occasional long-tenured traveler. A junior analyst would open every case, pull device and loyalty context, write a note, and decide. Most of that work is obvious. The cases that actually need a human get buried.
+Night Desk stamps hold receipts on an overnight refund / loyalty / payment-abuse review dump. It is not a chatbot and not a shrinking inbox.
 
-You give Night Desk a goal. It is not a chatbot. It plans a work order per open case, calls investigation tools (case file, account, device graph, velocity, loyalty, delivery/travel/ATO), writes a structured case note, and a deterministic policy guard — not the LLM — issues `AUTO_CLOSE`, `AUTO_ESCALATE`, or `HUMAN_QUEUE`. The morning inbox is only the real decisions.
+A goal starts a shift. Tools pull case, device graph, velocity, loyalty, delivery, ATO. Gemini 3.5 via Google ADK writes the note only. `decide()` then stamps the receipt: `{HOLD|ESCALATE}: {policy reason}`. Evidence is the facts that fired (device_ring, bonuses, fails/BINs, INR+POD, ATO) — not the narrative. If Gemini disagrees, the receipt shows the override.
 
-Built for the same domain as Tarka (local-first fraud OS): evaluate fires, Night Desk drains the review pile.
+If Vertex, Gemini, or Pub/Sub is down, every case HOLDs. First-open is that receipt, still on the row, with why + present/missing. There is no AUTO_CLOSE.
 
 ## Features and functionality
 
-- Goal-driven night shift (`POST /api/shifts`) that drains the queue without turn-by-turn prompting
-- Google ADK investigator with Gemini 3.5 Flash (tool planner fallback when no API key)
-- Tools for case, account, device graph, velocity, loyalty, delivery/travel/ATO
-- Structured case notes (summary, evidence, confidence, why-human)
-- Deterministic policy guard with a confidence floor
-- Human inbox + analyst resolve (close / escalate)
-- Live SSE agent trace in the ops console
-- Sample 10-case Meridian queue — no secrets required
-- Firestore + Pub/Sub on Cloud Run; file-store fallback locally
+- Goal-driven shift; Gemini writes notes; `decide()` is last word
+- Two-way dispositions: HOLD, ESCALATE
+- Fail-closed HOLD when Gemini, Vertex, or Pub/Sub is missing
+- Receipt on every row: why, present, missing
+- Override visible when the model disagrees
+- Sample Meridian cases — no secrets
+- Firestore + Pub/Sub on Cloud Run
 
 ## Technologies used
 
@@ -48,14 +50,13 @@ Synthetic Meridian Wallet cases in `sample_data/cases.json`. No production custo
 
 ## Findings and learnings
 
-- The valuable agent move in fraud ops is not “chat about a case.” It is “write the note and refuse to auto-act when the policy is thin.”
-- A deterministic policy guard behind the model is what makes AUTO_* safe to demo and to test.
-- Pub/Sub + Firestore give a real Cloud path without keeping a service warm; Cloud Run min-instances=0 keeps spend near zero.
-- A 10-case labeled queue (6 / 2 / 2) is enough to prove the agent acted, not talked.
+- Closing money unattended is the product failure. HOLD is the feature.
+- The demo that matters is the guard holding when Gemini/Vertex is down.
+- Gemini never AUTO_CLOSE. The stamp is `decide()`.
 
 ## Google SDK used
 
-Google ADK (`google-adk`) + Gemini API (`google-genai`). Firestore and Pub/Sub client libraries.
+Google ADK (`google-adk`) + Gemini API (`google-genai`). Firestore and Pub/Sub clients.
 
 ## Date started
 
@@ -63,5 +64,4 @@ Google ADK (`google-adk`) + Gemini API (`google-genai`). Firestore and Pub/Sub c
 
 ## Pre-existing / third-party code
 
-- Google ADK, google-cloud-firestore, google-cloud-pubsub, FastAPI, Next.js
-- No Tarka source was copied; this is a new repo. Domain knowledge only.
+Google ADK, google-cloud-firestore, google-cloud-pubsub, FastAPI, Next.js. New repo.

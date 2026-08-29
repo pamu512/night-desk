@@ -25,7 +25,7 @@ def test_tools_gather_ring_and_loyalty() -> None:
             summary="Benign retry",
             typology="benign_retry",
             evidence=["single PAN"],
-            recommended="AUTO_CLOSE",
+            recommended="HOLD",
             confidence=0.88,
         )
         assert note["status"] == "ok"

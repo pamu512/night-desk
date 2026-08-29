@@ -4,7 +4,8 @@ from typing import Any
 
 from nightdesk.events import bus
 from nightdesk.facts import facts_from_case
-from nightdesk.models import CaseNote, Disposition
+from nightdesk.models import CaseNote
+from nightdesk.policy import coerce_disposition
 from nightdesk.runtime import current_case_id, current_shift_id
 from nightdesk.store import store
 
@@ -173,21 +174,19 @@ def write_case_note(
     confidence: float,
     why_human: str = "",
 ) -> dict[str, Any]:
-    """Write the structured case note the morning analyst will read. Call once per case."""
+    """Gemini draft only. The policy stamp overwrites this after the model returns."""
     case = store.get_case(case_id)
     if not case:
         return {"status": "error", "message": f"unknown case {case_id}"}
-    rec: Disposition
-    if recommended not in {"AUTO_CLOSE", "AUTO_ESCALATE", "HUMAN_QUEUE"}:
-        recommended = "HUMAN_QUEUE"
-    rec = recommended  # type: ignore[assignment]
+    rec = coerce_disposition(recommended)
     note = CaseNote(
         summary=summary.strip(),
         typology=typology,
         evidence=[e for e in evidence if e],
         recommended=rec,
-        confidence=max(0.0, min(1.0, float(confidence))),
-        why_human=why_human or None,
+        why_human=why_human or "draft",
+        gemini_summary=summary.strip(),
+        gemini_recommended=rec,
     )
     case.note = note
     case.agent_recommended = rec

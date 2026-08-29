@@ -1,52 +1,50 @@
 # Night Desk
 
-Autonomous overnight triage for refund, loyalty, and payment-abuse queues.
+Hold receipts for refund, loyalty, and payment-abuse review. Two-way only: **HOLD** or **ESCALATE**. Money is never closed unattended.
 
-**Track:** Taskmaster · **Hackathon:** [All Things Agentic](https://allthingsagentichackathon.devpost.com/) · **License:** Apache-2.0
+**Demo runtime is Gemini 3.5 + ADK + GCP; Night Desk is a transferable skill on the buyer’s BYOM/VPC — not a hosted agent seat or a case CRM.**
 
-Night Desk is a working night-shift agent, not a chatbot. You give it a goal — *clear the overnight queue, write a note on every case, leave only the real decisions for a human* — and it plans, gathers device / loyalty / velocity context, writes the case note, and applies a deterministic policy guard. The morning analyst opens an inbox of two cases, not ten.
+**Track:** Taskmaster · **License:** Apache-2.0
 
-It sits in the same domain as [Tarka](https://github.com/pamu512/tarka): local-first fraud/risk ops. Tarka evaluates. Night Desk drains the review pile the evaluate step leaves behind.
+You give it a goal. It gathers device / loyalty / velocity context. Gemini (when the rail is up) writes a draft note. `decide()` stamps the receipt: `{HOLD|ESCALATE}: {reason}`, evidence = the facts that fired (device_ring, bonuses, fails/BINs, INR+POD, ATO). If Gemini, Vertex, or Pub/Sub is down, every case **HOLD**s. First-open is that receipt — why + present/missing — still on the row. Nothing leaves the pile.
 
 ![Architecture](docs/architecture.svg)
 
 ## Who it's for
 
-Fraud ops and risk analysts at a consumer wallet or loyalty program. The sample tenant is **Meridian Wallet** — cards, refunds, and points. The messy chore is the 02:00 dump of `REVIEW` cases: serial refunds, welcome-bonus farms, card testing, friendly-fraud INR claims, the occasional eight-year customer in Tokyo.
+Fraud ops on a consumer wallet or loyalty program. Sample tenant: **Meridian Wallet**. The chore is the overnight `REVIEW` dump. The product is a guard that holds, not a shrinking inbox.
 
 ## How it works
 
-1. A goal starts a shift (`POST /api/shifts`). The start is published to **Cloud Pub/Sub** (`nightdesk-shifts`).
-2. The **Google ADK** shift boss (Gemini 3.5 Flash when a key is present; a tool planner otherwise) walks every `OPEN` case.
-3. Tools pull the case file, account profile, device graph, auth velocity, loyalty history, and delivery / travel / ATO flags.
-4. The agent writes a structured case note (summary, evidence, recommended disposition, confidence).
-5. A **policy guard** — plain Python, tested, not an LLM — is the last word. Low confidence is forced to `HUMAN_QUEUE`.
-6. Cases and shift state persist in **Firestore** on Cloud Run (JSON file store locally if there is no emulator or ADC).
-7. The ops console streams the trace over SSE. Only `HUMAN_QUEUE` items appear in the morning inbox.
+1. A goal starts a shift (`POST /api/shifts`). Ingest goes to **Cloud Pub/Sub** when that rail is up.
+2. **Google ADK** + **Gemini 3.5 Flash** write the note only. They do not close money.
+3. Tools pull case file, account, device graph, velocity, loyalty, delivery / travel / ATO.
+4. `decide()` is two-way. Slam-dunk abuse → `ESCALATE`. Everything else → `HOLD`.
+5. Missing Gemini (or Vertex, if that is the model rail) or Pub/Sub → fail-closed `HOLD`. Never silent deny.
+6. If Gemini’s draft disagrees, the receipt shows the override. The stamp wins.
+7. Firestore on Cloud Run (file store locally without ADC). Console streams the trace.
 
 ### Dispositions
 
 | Outcome | When |
 |---|---|
-| `AUTO_ESCALATE` | ATO + refund, card-testing burst, same-device refund ring, loyalty farm, INR vs proof of delivery |
-| `AUTO_CLOSE` | Long-tenured traveler that matches itinerary; single-PAN soft-decline retry |
-| `HUMAN_QUEUE` | High-value mixed signals, household point-pooling, or writer confidence &lt; 0.72 |
+| `ESCALATE` | Rails up **and** ATO + refund, card-testing burst, same-device refund ring, loyalty farm, or INR vs proof of delivery |
+| `HOLD` | Thin/mixed evidence, household pooling, high-value without a slam-dunk — **or any rail down** |
 
-Sample queue (10 cases in `sample_data/cases.json`): 6 escalate, 2 close, **2 human**. That split is the demo.
+There is no close path.
 
 ## Architecture
 
 ```
 Ops console (Next.js) ──► FastAPI on Cloud Run
                               │
-                              ├─ Google ADK + Gemini 3.5 Flash
-                              │    tools: case, graph, velocity, loyalty, note
-                              ├─ Policy guard (deterministic)
-                              ├─ Cloud Firestore  (cases, notes, shifts)
-                              └─ Cloud Pub/Sub    (shift-started)
+                              ├─ Google ADK + Gemini 3.5 Flash  (note only)
+                              ├─ decide()  HOLD | ESCALATE
+                              ├─ Cloud Firestore  (cases, receipts, shifts)
+                              └─ Cloud Pub/Sub    (shift-started; down → HOLD)
 ```
 
-The diagram asset lives at [`docs/architecture.svg`](docs/architecture.svg).
+Diagram: [`docs/architecture.svg`](docs/architecture.svg).
 
 ### Required stack (hackathon)
 
@@ -54,16 +52,14 @@ The diagram asset lives at [`docs/architecture.svg`](docs/architecture.svg).
 |---|---|
 | Gemini 3.5 or newer | `GEMINI_MODEL=gemini-3.5-flash` via Gemini API or Vertex AI |
 | Google agent framework | **Google ADK** (`google.adk.agents.llm_agent.Agent`) |
-| Google Cloud service | **Firestore** + **Pub/Sub**, imported and called in `nightdesk/store.py` and `nightdesk/ingest.py`; deploy target is **Cloud Run** |
+| Google Cloud service | **Firestore** + **Pub/Sub**, imported and called; deploy on **Cloud Run** |
 
 ## How to run locally
 
-Python 3.11+ and Node 20+. No secrets required for the sample queue — the planner uses the same tools as the Gemini agent.
+Python 3.11+ and Node 20+. No secrets. Locally Gemini and Pub/Sub are missing → every receipt is fail-closed HOLD. That is the demo.
 
 ```bash
 cp .env.example .env
-# optional, for the live ADK path:
-# echo 'GOOGLE_API_KEY=your_ai_studio_key' >> .env
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -76,16 +72,14 @@ PYTHONPATH=backend python -m nightdesk
 cd web && npm install && npm run dev -- --port 43147
 ```
 
-Open [http://127.0.0.1:43147](http://127.0.0.1:43147). Click **Run night shift**. Watch the trace. Open **Human inbox**.
-
-One-shot API check without the UI:
+Open [http://127.0.0.1:43147](http://127.0.0.1:43147). Click **Stamp receipts**. Read HOLD + why + present/missing on the row. `CASE-2404` is still there.
 
 ```bash
 PYTHONPATH=backend python -m nightdesk &
 curl -s http://127.0.0.1:43148/api/health
 curl -s -X POST http://127.0.0.1:43148/api/shifts \
   -H 'content-type: application/json' \
-  -d '{"goal":"Clear the overnight queue.","force_mock":true}'
+  -d '{"goal":"Stamp hold receipts. Never close money.","force_mock":true}'
 ```
 
 ### Tests
@@ -95,6 +89,8 @@ source .venv/bin/activate
 PYTHONPATH=backend pytest backend/tests -q
 ```
 
+Proves `decide()` cannot close, fail-closed HOLD on missing rails, and the note stamp.
+
 ### ADK web (optional)
 
 ```bash
@@ -102,19 +98,17 @@ cd backend
 adk web --port 43149
 ```
 
-The `nightdesk` agent under `backend/agents/` is the same shift boss.
-
 ### Docker
 
 ```bash
 docker compose up --build
 ```
 
-Compose builds the static console into the API image and serves both on port `43148`.
+Serves API + static console on `43148`.
 
 ## Deploy to Cloud Run
 
-Project used in this write-up: `tarka-505801`. Do not bake keys into the image.
+Project in this write-up: `tarka-505801` (GCP project id). Do not bake keys.
 
 ```bash
 export PROJECT_ID=tarka-505801
@@ -126,7 +120,6 @@ gcloud services enable run.googleapis.com firestore.googleapis.com pubsub.google
 gcloud firestore databases create --location=$REGION || true
 gcloud pubsub topics create nightdesk-shifts || true
 
-# Gemini API key as a Secret Manager secret (preferred) or --set-env-vars
 echo -n "$GOOGLE_API_KEY" | gcloud secrets create gemini-api-key --data-file=- || true
 
 gcloud run deploy nightdesk \
@@ -139,13 +132,9 @@ gcloud run deploy nightdesk \
   --set-secrets "GOOGLE_API_KEY=gemini-api-key:latest"
 ```
 
-`--source .` uses the repo `Dockerfile`. Scale-to-zero keeps spend near zero. After the demo video, delete the service:
+Scale to zero. After a live GCP proof, delete the service.
 
-```bash
-gcloud run services delete nightdesk --region $REGION
-```
-
-Vertex path (no AI Studio key): set `GOOGLE_GENAI_USE_VERTEXAI=true` and grant the Cloud Run service account `roles/aiplatform.user`.
+Vertex path: `GOOGLE_GENAI_USE_VERTEXAI=true` and `roles/aiplatform.user` on the runtime SA. If Vertex is down, HOLD.
 
 ## Environment variables
 
@@ -154,30 +143,26 @@ Vertex path (no AI Studio key): set `GOOGLE_GENAI_USE_VERTEXAI=true` and grant t
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Gemini API (AI Studio) |
 | `GEMINI_MODEL` | Default `gemini-3.5-flash` |
 | `GOOGLE_GENAI_USE_VERTEXAI` | `true` to use Vertex |
-| `GOOGLE_CLOUD_PROJECT` | GCP project (`tarka-505801`) |
+| `GOOGLE_CLOUD_PROJECT` | GCP project |
 | `GOOGLE_CLOUD_LOCATION` | Vertex / Cloud Run region |
-| `GOOGLE_APPLICATION_CREDENTIALS` | ADC JSON (local cloud path) |
-| `FIRESTORE_EMULATOR_HOST` | Use the Firestore emulator |
-| `PUBSUB_EMULATOR_HOST` | Use the Pub/Sub emulator |
+| `GOOGLE_APPLICATION_CREDENTIALS` | ADC JSON |
+| `FIRESTORE_EMULATOR_HOST` | Firestore emulator |
+| `PUBSUB_EMULATOR_HOST` | Pub/Sub emulator |
 | `PUBSUB_TOPIC` | Default `nightdesk-shifts` |
-| `NEXT_PUBLIC_API_URL` | Console → API (local default `http://127.0.0.1:43148`) |
+| `NEXT_PUBLIC_API_URL` | Console → API |
 
 ## Repository map
 
 ```
-sample_data/cases.json     10 overnight cases (no secrets)
-backend/nightdesk/         FastAPI + ADK agent + policy + Firestore/Pub/Sub
-backend/tests/             policy + agent loop + tools
-web/                       Next.js ops console
-docs/architecture.svg      diagram asset
-DEMO.md                    ~4 min video script
-Dockerfile                 Cloud Run image (API + static console)
+sample_data/cases.json     sample overnight cases (no secrets)
+backend/nightdesk/         FastAPI + ADK + decide() + Firestore/Pub/Sub
+backend/tests/             cannot-close, fail-closed, note stamp
+web/                       hold-receipt console
+docs/architecture.svg
+DEMO.md
+Dockerfile
 ```
-
-## Demo video
-
-See [`DEMO.md`](DEMO.md).
 
 ## What this is not
 
-Not a replacement for Tarka's evaluate path. Not a chat window. Not a live 24/7 deployment — spin it up for the video, then scale to zero.
+Not a case CRM. Not a hosted agent seat. Not a close-the-queue toy. Demo runtime is Gemini 3.5 + ADK + GCP; the skill transfers onto the buyer’s model and VPC.

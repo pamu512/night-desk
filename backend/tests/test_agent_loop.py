@@ -1,45 +1,50 @@
 import pytest
 
 from nightdesk.agent.shift import run_shift
+from nightdesk.policy import CLOSED
 from nightdesk.seed import reset_queue
 from nightdesk.store import store
 
 
 @pytest.mark.asyncio
-async def test_night_shift_drains_queue_and_writes_notes() -> None:
+async def test_shift_stamps_holds_when_rails_are_down() -> None:
     reset_queue()
     shift = await run_shift(
-        "Clear the overnight refund, loyalty, and payment-abuse queue.",
+        "Stamp a hold receipt on every case. Never close money.",
         force_mock=True,
     )
     assert shift.status == "completed"
     assert shift.counts["processed"] == 10
-    assert shift.counts["auto_escalated"] == 6
-    assert shift.counts["auto_closed"] == 2
-    assert shift.counts["human_queue"] == 2
-    assert shift.counts["open"] == 0
+    assert shift.counts["hold"] == 10
+    assert shift.counts.get("escalated", 0) == 0
+    assert "auto_closed" not in shift.counts
+    assert shift.rails is not None
+    assert "gemini" in shift.rails.missing or "pubsub" in shift.rails.missing
 
-    inbox = store.list_cases(status="human_queue")
-    assert {c.id for c in inbox} == {"CASE-2405", "CASE-2410"}
-    for case in inbox:
+    cases = store.list_cases()
+    assert len(cases) == 10
+    ids = {c.id for c in cases}
+    assert "CASE-2404" in ids
+    for case in cases:
+        assert case.final_disposition == "HOLD"
+        assert case.final_disposition not in CLOSED
+        assert case.status == "hold"
         assert case.note is not None
-        assert case.note.summary
-        assert case.note.evidence
+        assert case.note.summary.startswith("HOLD:")
+        assert case.note.recommended == "HOLD"
         assert case.note.why_human
-
-    closed = store.list_cases(status="auto_closed")
-    assert {c.id for c in closed} == {"CASE-2404", "CASE-2408"}
-    for case in store.list_cases():
-        assert case.note is not None
-        assert case.final_disposition is not None
-        assert case.status != "open"
+        assert case.note.missing
+        assert "Fail-closed" in case.note.why_human
 
 
 @pytest.mark.asyncio
-async def test_second_shift_on_empty_queue_is_a_noop() -> None:
+async def test_second_shift_does_not_drop_holds() -> None:
     reset_queue()
     await run_shift("first", force_mock=True)
     second = await run_shift("second", force_mock=True)
     assert second.status == "completed"
     assert second.counts["processed"] == 0
-    assert second.case_ids == []
+    still = store.list_cases()
+    assert len(still) == 10
+    assert all(c.status == "hold" for c in still)
+    assert any(c.id == "CASE-2404" for c in still)

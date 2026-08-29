@@ -5,15 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-Disposition = Literal["AUTO_CLOSE", "AUTO_ESCALATE", "HUMAN_QUEUE"]
-CaseStatus = Literal[
-    "open",
-    "processing",
-    "auto_closed",
-    "auto_escalated",
-    "human_queue",
-    "resolved",
-]
+Disposition = Literal["HOLD", "ESCALATE"]
+CaseStatus = Literal["open", "processing", "hold", "escalated"]
 ShiftStatus = Literal["running", "completed", "failed"]
 
 
@@ -21,13 +14,55 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+class Rails(BaseModel):
+    """Live rails. Missing Gemini/Vertex (whichever is configured) or Pub/Sub → fail-closed HOLD."""
+
+    gemini: bool
+    vertex: bool
+    pubsub: bool
+    use_vertex: bool = False
+
+    @property
+    def missing(self) -> list[str]:
+        out: list[str] = []
+        if self.use_vertex:
+            if not self.vertex:
+                out.append("vertex")
+        elif not self.gemini:
+            out.append("gemini")
+        if not self.pubsub:
+            out.append("pubsub")
+        return out
+
+    @property
+    def present(self) -> list[str]:
+        out: list[str] = []
+        if self.use_vertex:
+            if self.vertex:
+                out.append("vertex")
+        elif self.gemini:
+            out.append("gemini")
+        if self.pubsub:
+            out.append("pubsub")
+        return out
+
+    @property
+    def ok(self) -> bool:
+        return not self.missing
+
+
 class CaseNote(BaseModel):
     summary: str
     typology: str
     evidence: list[str] = Field(default_factory=list)
     recommended: Disposition
-    confidence: float = 0.5
-    why_human: str | None = None
+    why_human: str
+    present: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    gemini_summary: str | None = None
+    gemini_recommended: Disposition | None = None
+    override: bool = False
+    confidence: float = 0.0
 
 
 class CaseRecord(BaseModel):
@@ -57,8 +92,6 @@ class CaseRecord(BaseModel):
     final_disposition: Disposition | None = None
     policy_override: bool = False
     shift_id: str | None = None
-    resolved_by: str | None = None
-    resolved_at: str | None = None
 
 
 class TraceEvent(BaseModel):
@@ -83,6 +116,7 @@ class ShiftRecord(BaseModel):
     store_backend: str = "memory"
     counts: dict[str, int] = Field(default_factory=dict)
     case_ids: list[str] = Field(default_factory=list)
+    rails: Rails | None = None
     error: str | None = None
 
 

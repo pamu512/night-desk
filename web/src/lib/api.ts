@@ -28,7 +28,5 @@ export const api = {
   startShift: (goal: string, force_mock = false) =>
     post<ShiftRecord>("/api/shifts", { goal, force_mock }),
   reset: () => post<{ ok: boolean; cases: number }>("/api/reset"),
-  resolve: (id: string, action: "close" | "escalate", note = "") =>
-    post<CaseRecord>(`/api/cases/${id}/resolve`, { action, note }),
   eventsUrl: (shiftId: string) => `${apiBase()}/api/shifts/${shiftId}/events`,
 };

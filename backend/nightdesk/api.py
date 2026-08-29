@@ -16,7 +16,8 @@ from pydantic import BaseModel, Field
 
 from nightdesk import config
 from nightdesk.events import bus
-from nightdesk.models import utcnow
+from nightdesk.ingest import pubsub_live
+from nightdesk.rails import assess_rails
 from nightdesk.seed import reset_queue
 from nightdesk.store import store
 
@@ -27,7 +28,11 @@ STATIC_DIR = Path(os.getenv("NIGHTDESK_STATIC", config.ROOT / "web" / "out"))
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    if not store.list_cases():
+    try:
+        existing = store.list_cases()
+    except Exception:
+        existing = []
+    if not existing:
         reset_queue()
         log.info("Seeded sample queue")
     yield
@@ -47,20 +52,16 @@ _shift_tasks: dict[str, asyncio.Task[None]] = {}
 class ShiftRequest(BaseModel):
     goal: str = Field(
         default=(
-            "Clear the overnight refund, loyalty, and payment-abuse queue. "
-            "Write a case note on every open case. Queue only the real decisions for a human."
+            "Stamp a hold receipt on every case. Escalate only slam-dunk abuse "
+            "when Gemini/Vertex and Pub/Sub are up. Never close money."
         )
     )
     force_mock: bool = False
 
 
-class ResolveRequest(BaseModel):
-    action: str
-    note: str = ""
-
-
 @app.get("/api/health")
 def health() -> dict[str, Any]:
+    rails = assess_rails(pubsub_up=pubsub_live())
     return {
         "ok": True,
         "service": "nightdesk",
@@ -71,6 +72,11 @@ def health() -> dict[str, Any]:
         "store_fallback": store.fallback_reason,
         "project": config.GOOGLE_CLOUD_PROJECT,
         "pubsub_topic": config.PUBSUB_TOPIC,
+        "rails": {
+            "present": rails.present,
+            "missing": rails.missing,
+            "ok": rails.ok,
+        },
     }
 
 
@@ -90,7 +96,7 @@ def get_case(case_id: str) -> dict[str, Any]:
 
 @app.get("/api/inbox")
 def inbox() -> dict[str, Any]:
-    cases = store.list_cases(status="human_queue")
+    cases = store.list_cases(status="hold")
     return {"cases": [c.model_dump() for c in cases]}
 
 
@@ -147,19 +153,8 @@ async def start_shift(body: ShiftRequest) -> dict[str, Any]:
 
 
 @app.post("/api/cases/{case_id}/resolve")
-def resolve_case(case_id: str, body: ResolveRequest) -> dict[str, Any]:
-    case = store.get_case(case_id)
-    if not case:
-        raise HTTPException(404, "case not found")
-    if body.action not in {"close", "escalate"}:
-        raise HTTPException(400, "action must be close or escalate")
-    case.status = "resolved"
-    case.resolved_by = "analyst"
-    case.resolved_at = utcnow()
-    if body.note and case.note:
-        case.note.summary = f"{case.note.summary}\n\nAnalyst: {body.note}"
-    store.upsert_case(case)
-    return case.model_dump()
+def resolve_case(case_id: str) -> dict[str, Any]:
+    raise HTTPException(400, "Night Desk does not close money. Receipts stay on HOLD or ESCALATE.")
 
 
 @app.post("/api/reset")

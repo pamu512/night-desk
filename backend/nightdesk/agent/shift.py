@@ -4,78 +4,59 @@ import logging
 import uuid
 
 from nightdesk import config
-from nightdesk.agent.mock_loop import investigate_case as mock_investigate
+from nightdesk.agent.mock_loop import investigate_case as gather_case
 from nightdesk.events import bus
 from nightdesk.facts import facts_from_case
 from nightdesk.ingest import publish_shift_started
-from nightdesk.models import CaseRecord, ShiftRecord, utcnow
-from nightdesk.policy import apply_confidence, decide
+from nightdesk.models import CaseRecord, Rails, ShiftRecord, utcnow
+from nightdesk.policy import stamp_note
+from nightdesk.rails import assess_rails
 from nightdesk.runtime import current_case_id, current_shift_id
 from nightdesk.store import store
 
 log = logging.getLogger("nightdesk.shift")
 
-STATUS_FOR = {
-    "AUTO_CLOSE": "auto_closed",
-    "AUTO_ESCALATE": "auto_escalated",
-    "HUMAN_QUEUE": "human_queue",
-}
 
-
-def _apply_policy(case: CaseRecord, shift_id: str) -> CaseRecord:
+def _stamp(case: CaseRecord, shift_id: str, rails: Rails) -> CaseRecord:
     facts = facts_from_case(case)
-    policy_disp, policy_reason = decide(facts)
-    confidence = case.note.confidence if case.note else 0.5
-    agent_disp = case.agent_recommended or policy_disp
-    final, reason, conf_over = apply_confidence(policy_disp, confidence, policy_reason)
-    overridden = bool(case.agent_recommended and case.agent_recommended != final) or conf_over
-    case.final_disposition = final
-    case.policy_override = overridden
-    case.status = STATUS_FOR[final]  # type: ignore[assignment]
-    case.shift_id = shift_id
-    if case.note and final == "HUMAN_QUEUE" and not case.note.why_human:
-        case.note.why_human = reason
-    store.upsert_case(case)
+    draft = case.note
+    stamped = stamp_note(case, facts, rails, gemini_draft=draft)
+    stamped.shift_id = shift_id
+    store.upsert_case(stamped)
     bus.emit(
         shift_id,
         agent="policy",
         kind="policy",
-        case_id=case.id,
-        message=f"{case.id} → {final}" + (" (override)" if overridden else ""),
+        case_id=stamped.id,
+        message=f"{stamped.id} → {stamped.final_disposition}"
+        + (" (override)" if stamped.policy_override else ""),
         data={
-            "agent_recommended": agent_disp,
-            "policy": policy_disp,
-            "final": final,
-            "reason": reason,
-            "overridden": overridden,
+            "final": stamped.final_disposition,
+            "reason": stamped.note.why_human if stamped.note else "",
+            "present": stamped.note.present if stamped.note else [],
+            "missing": stamped.note.missing if stamped.note else [],
+            "overridden": stamped.policy_override,
+            "rails_missing": rails.missing,
         },
     )
     bus.emit(
         shift_id,
         agent="policy",
         kind="disposition",
-        case_id=case.id,
-        message=f"{final}: {reason}",
+        case_id=stamped.id,
+        message=stamped.note.summary if stamped.note else str(stamped.final_disposition),
     )
-    return case
+    return stamped
 
 
-async def _investigate(case_id: str, shift_id: str, use_gemini: bool) -> CaseRecord:
-    if use_gemini:
+async def _investigate(
+    case_id: str, shift_id: str, use_gemini: bool, rails: Rails
+) -> tuple[CaseRecord, Rails]:
+    if use_gemini and rails.ok:
         from nightdesk.agent.gemini_loop import investigate_case_gemini
 
         try:
-            case = await investigate_case_gemini(case_id, shift_id)
-            if case.note is None:
-                bus.emit(
-                    shift_id,
-                    agent="shift_boss",
-                    kind="info",
-                    case_id=case_id,
-                    message="Gemini returned without a note — finishing with the tool planner",
-                )
-                case = mock_investigate(case_id, shift_id)
-            return case
+            return await investigate_case_gemini(case_id, shift_id), rails
         except Exception as exc:  # noqa: BLE001
             log.exception("Gemini path failed for %s", case_id)
             bus.emit(
@@ -83,19 +64,22 @@ async def _investigate(case_id: str, shift_id: str, use_gemini: bool) -> CaseRec
                 agent="shift_boss",
                 kind="error",
                 case_id=case_id,
-                message=f"Gemini error ({type(exc).__name__}); falling back to planner",
+                message=f"Gemini error ({type(exc).__name__}); fail-closed HOLD",
             )
-            return mock_investigate(case_id, shift_id)
-    return mock_investigate(case_id, shift_id)
+            case = store.get_case(case_id) or gather_case(case_id, shift_id)
+            down = rails.model_copy(update={"gemini": False, "vertex": False})
+            return case, down
+    return gather_case(case_id, shift_id), rails
 
 
 def open_shift(goal: str, *, force_mock: bool = False) -> ShiftRecord:
     shift_id = f"shift-{uuid.uuid4().hex[:10]}"
     use_gemini = config.has_gemini() and not force_mock
-    engine = f"adk+{config.GEMINI_MODEL}" if use_gemini else "tool-planner"
+    engine = f"adk+{config.GEMINI_MODEL}" if use_gemini else "receipt-stamp"
     open_cases = store.list_cases(status="open")
     case_ids = [c.id for c in open_cases]
     message_id = publish_shift_started(shift_id, goal, case_ids)
+    rails = assess_rails(pubsub_up=message_id is not None, gemini_up=use_gemini)
     shift = ShiftRecord(
         id=shift_id,
         goal=goal,
@@ -106,6 +90,7 @@ def open_shift(goal: str, *, force_mock: bool = False) -> ShiftRecord:
         pubsub_message_id=message_id,
         store_backend=store.backend,
         case_ids=case_ids,
+        rails=rails,
     )
     store.upsert_shift(shift)
     return shift
@@ -116,64 +101,44 @@ async def run_shift(goal: str, *, force_mock: bool = False, shift: ShiftRecord |
     shift_id = shift.id
     token = current_shift_id.set(shift_id)
     use_gemini = config.has_gemini() and not force_mock
-    engine = shift.engine
+    rails = shift.rails or assess_rails(
+        pubsub_up=shift.pubsub_message_id is not None,
+        gemini_up=use_gemini,
+    )
     case_ids = list(shift.case_ids)
     bus.emit(
         shift_id,
         agent="shift_boss",
         kind="info",
-        message=f"Goal accepted. {len(case_ids)} open cases. Engine={engine}. Store={store.backend}.",
-        data={"goal": goal, "case_ids": case_ids},
+        message=(
+            f"Goal accepted. {len(case_ids)} cases. Engine={shift.engine}. "
+            f"Rails present={rails.present or ['—']} missing={rails.missing or ['—']}."
+        ),
+        data={"goal": goal, "case_ids": case_ids, "rails": rails.model_dump()},
     )
 
     try:
         for case_id in case_ids:
             current_case_id.set(case_id)
-            case = await _investigate(case_id, shift_id, use_gemini)
-            _apply_policy(case, shift_id)
+            case, case_rails = await _investigate(case_id, shift_id, use_gemini, rails)
+            _stamp(case, shift_id, case_rails)
 
-        remaining = store.list_cases(status="open")
-        if remaining:
-            bus.emit(
-                shift_id,
-                agent="shift_boss",
-                kind="info",
-                message=f"{len(remaining)} cases still open — second pass",
-            )
-            for case in remaining:
-                current_case_id.set(case.id)
-                done = await _investigate(case.id, shift_id, use_gemini)
-                _apply_policy(done, shift_id)
-
-        counts = {
-            "auto_closed": len(store.list_cases(status="auto_closed")),
-            "auto_escalated": len(store.list_cases(status="auto_escalated")),
-            "human_queue": len(store.list_cases(status="human_queue")),
-            "open": len(store.list_cases(status="open")),
-            "processed": len(case_ids),
-        }
-        # Counts above are global; restrict to this shift.
         shift_cases = [c for c in store.list_cases() if c.shift_id == shift_id]
         counts = {
-            "auto_closed": sum(1 for c in shift_cases if c.status == "auto_closed"),
-            "auto_escalated": sum(1 for c in shift_cases if c.status == "auto_escalated"),
-            "human_queue": sum(1 for c in shift_cases if c.status == "human_queue"),
-            "open": sum(1 for c in shift_cases if c.status == "open"),
+            "hold": sum(1 for c in shift_cases if c.final_disposition == "HOLD"),
+            "escalated": sum(1 for c in shift_cases if c.final_disposition == "ESCALATE"),
             "processed": len(shift_cases),
         }
         shift.status = "completed"
         shift.finished_at = utcnow()
         shift.counts = counts
+        shift.rails = rails
         store.upsert_shift(shift)
         bus.emit(
             shift_id,
             agent="shift_boss",
             kind="info",
-            message=(
-                f"Shift complete. auto_close={counts['auto_closed']} "
-                f"auto_escalate={counts['auto_escalated']} "
-                f"human_queue={counts['human_queue']}"
-            ),
+            message=f"Receipts stamped. hold={counts['hold']} escalate={counts['escalated']}",
             data=counts,
         )
     except Exception as exc:  # noqa: BLE001

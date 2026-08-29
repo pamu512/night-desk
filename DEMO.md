@@ -1,66 +1,50 @@
 # Night Desk — ~4 minute demo script
 
-Record unedited. Show the agent working, then show GCP.
+Record unedited. Show the guard holding. Then show GCP.
 
-## 0:00–0:35 · Problem
+## 0:00–0:40 · Problem
 
-Talk over the empty console (sample queue loaded, shift not run).
+Talk over the console with the sample rows loaded, receipts not stamped yet.
 
-> Meridian Wallet dumps a review pile every night. Ten cases here — refunds, loyalty farms, card testing, a traveler in Tokyo. A junior analyst would open every one, pull device and points context, write a note, and decide. Most of that is obvious. The two cases that actually need a human get buried.
+> Overnight review dump: refunds, loyalty farms, card testing, a traveler. The failure mode is closing money because a model felt sure. Night Desk does not close. It stamps a hold receipt.
 
-Point at the **All cases** list. Do not click Run yet.
+Do not say the pile will shrink. Do not preview an inbox of two.
 
-## 0:35–0:55 · Value
+## 0:40–1:00 · Value
 
-> Night Desk is the night shift. You give it a goal. It plans, gathers context, writes the case note, and a policy guard — not the model — is the last word. Morning inbox is only the real decisions.
+> Gemini writes the note. `decide()` stamps HOLD or ESCALATE. If Gemini, Vertex, or Pub/Sub is down, everything HOLDs. First-open is that receipt — why, present, missing — still on the row.
 
-Scroll the goal box. Leave the default text.
+Point at the rail badges (gemini missing / pubsub missing on a local box).
 
-## 0:55–2:40 · Live run
+## 1:00–2:30 · Live run
 
-1. Click **Run night shift**.
-2. Stay on the **Agent trace**. Call out, out loud:
-   - `Goal accepted. 10 open cases`
-   - a `Plan CASE-2401: claim → case file → …`
-   - tool lines (`get_device_graph`, `get_loyalty_history`)
-   - `wrote note`
-   - `CASE-2401 → AUTO_ESCALATE`
-3. When it finishes, read the summary: auto-close 2, auto-escalate 6, human_queue 2.
-4. Switch to **Human inbox**. Open `CASE-2405` ($1,840 mixed refund) and `CASE-2410` (household points). Show the pre-written note and “Why human”.
-5. Open `CASE-2404` on All cases — eight-year customer in Tokyo, auto-closed. Open `CASE-2409` — ATO + refund, auto-escalated.
+1. Click **Stamp receipts**.
+2. On the trace, call out fail-closed / `HOLD:` lines.
+3. On the list, open any row. Read **why** and **present / missing** without leaving the pile.
+4. Open `CASE-2404` (Tokyo traveler). It is still here. Receipt is HOLD. That is success.
+5. Open a slam-dunk row (`CASE-2409` ATO). Locally, rails are down, so it is HOLD too — the punchline. Gemini never AUTO_CLOSE.
 
-If the badge says **Planner (no Gemini key)**, say:
+If rails are up on Cloud Run, slam-dunks may show ESCALATE. Still no close. Nobody disappears.
 
-> This recording is the tool planner, same tools the ADK agent calls. With `GOOGLE_API_KEY` the shift boss is Gemini 3.5 Flash on Google ADK.
+## 2:30–3:40 · Proof of Google Cloud
 
-If the badge says **Gemini gemini-3.5-flash**, say that instead and linger on a Gemini tool-call line.
+1. Cloud Run service `nightdesk`, `*.run.app`.
+2. `/api/health` — `model: gemini-3.5-flash`, rails present/missing, store firestore.
+3. Firestore `nightdesk` cases/shifts.
+4. Pub/Sub `nightdesk-shifts` **or** say the missing pubsub rail is why every receipt HOLDs.
 
-## 2:40–3:50 · Proof of Google Cloud
+> Demo runtime is Gemini 3.5, ADK, Cloud Run, Firestore, Pub/Sub. Min instances zero.
 
-Switch to the browser / gcloud window you prepared *before* recording:
+## 3:40–4:00 · Close
 
-1. Cloud Run: service `nightdesk`, region `us-central1`, URL `*.run.app`.
-2. Open that URL (or `/api/health`) — JSON shows `store: firestore`, `project: tarka-505801`, `model: gemini-3.5-flash`.
-3. Firestore console: collection `nightdesk` → `cases` / `shifts`.
-4. Pub/Sub: topic `nightdesk-shifts` with a published message, **or** the shift record’s `pubsub_message_id`.
-5. Optional: Cloud Run logs showing `Firestore connected` / `Pub/Sub published`.
+Stay on a HOLD row.
 
-One sentence:
+> The guard held. Why and present/missing are on the receipt. Gemini does not close money.
 
-> Backend is Cloud Run, state is Firestore, shift ingest is Pub/Sub, reasoning is Gemini 3.5 via ADK. Min instances are zero so this does not sit on the bill.
+Stop.
 
-## 3:50–4:00 · Close
+## Prep
 
-Back to the human inbox.
-
-> Ten cases in. Two decisions for a human. That is the chore.
-
-Stop recording.
-
-## Prep checklist (do this before you hit record)
-
-- [ ] `gcloud run deploy` from the README, then leave the service up for the take
-- [ ] Console zoom large enough to read the trace
-- [ ] Sample queue reseeded (`Reseed sample cases`)
-- [ ] Second tab already on Cloud Run + Firestore
-- [ ] After the take: `gcloud run services delete nightdesk --region us-central1`
+- [ ] Reseed, then stamp once on camera
+- [ ] GCP tab ready if you have a live deploy; otherwise show `/api/health` rails.missing
+- [ ] Delete Cloud Run after the take

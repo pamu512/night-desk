@@ -21,7 +21,5 @@ def reset_queue() -> list[CaseRecord]:
         case.final_disposition = None
         case.policy_override = False
         case.shift_id = None
-        case.resolved_by = None
-        case.resolved_at = None
     store.replace_cases(cases)
     return cases

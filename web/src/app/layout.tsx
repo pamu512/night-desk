@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Night Desk — overnight fraud triage",
+  title: "Night Desk — hold receipts",
   description:
-    "Autonomous night-shift agent that drains refund, loyalty, and payment-abuse queues and leaves only real decisions for a human.",
+    "HOLD or ESCALATE. Gemini writes the note. decide() stamps. Never close money unattended.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -56,5 +56,16 @@ def publish_shift_started(shift_id: str, goal: str, case_ids: list[str]) -> str 
         return None
 
 
+def pubsub_live() -> bool:
+    import os
+
+    return bool(
+        os.getenv("PUBSUB_EMULATOR_HOST")
+        or os.getenv("K_SERVICE")
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        or os.getenv("NIGHTDESK_FORCE_PUBSUB") == "1"
+    )
+
+
 def local_events() -> list[dict]:
     return list(_local_log)
