@@ -1,0 +1,462 @@
+[
+  {
+    "id": "CASE-2401",
+    "typology": "refund_abuse",
+    "title": "Serial refunds on one Pixel fingerprint",
+    "amount_usd": 428.6,
+    "currency": "USD",
+    "channel": "app",
+    "alerted_at": "2026-08-28T22:14:00Z",
+    "rule_hits": ["refund_velocity_7d", "same_device_cluster", "locker_shipping"],
+    "narrative": "Four electronics refunds in six days, all from the same device, two nearby Amazon-style lockers.",
+    "account": {
+      "id": "acc_8f21",
+      "email": "m.cho@inboxmail.test",
+      "created_at": "2026-08-12",
+      "age_days": 16,
+      "kyc": "basic",
+      "loyalty_tier": "none",
+      "lifetime_spend_usd": 512.4,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "visa_4242",
+      "brand": "visa",
+      "bin": "414720",
+      "auth_result": "approved",
+      "avs": "partial"
+    },
+    "device": {
+      "id": "dev_pixel8_aa91",
+      "fingerprint": "fp_9c3e",
+      "os": "Android 15",
+      "linked_accounts": ["acc_8f21", "acc_8f44", "acc_8f90", "acc_91aa"],
+      "ip_country": "US",
+      "ip_city": "Fresno",
+      "vpn": false
+    },
+    "refunds_7d": [
+      {"order_id": "ord_110", "amount_usd": 89.0, "reason": "changed_mind", "days_ago": 6},
+      {"order_id": "ord_118", "amount_usd": 124.5, "reason": "not_as_described", "days_ago": 4},
+      {"order_id": "ord_126", "amount_usd": 99.0, "reason": "changed_mind", "days_ago": 2},
+      {"order_id": "ord_131", "amount_usd": 116.1, "reason": "item_not_received", "days_ago": 0}
+    ],
+    "delivery": {"carrier_status": "delivered", "proof": true, "method": "locker"}
+  },
+  {
+    "id": "CASE-2402",
+    "typology": "loyalty_farming",
+    "title": "Welcome-bonus farm on one BIN",
+    "amount_usd": 180.0,
+    "currency": "USD",
+    "channel": "web",
+    "alerted_at": "2026-08-28T22:31:00Z",
+    "rule_hits": ["new_account_bonus", "shared_bin_cluster", "shared_ship_to"],
+    "narrative": "Six accounts opened in 11 days, same issuing BIN, same apartment shipping address, each claiming the 3,000-point welcome bonus then cashing out.",
+    "account": {
+      "id": "acc_c03a",
+      "email": "j.ortiz+6@maildrop.test",
+      "created_at": "2026-08-22",
+      "age_days": 6,
+      "kyc": "email_only",
+      "loyalty_tier": "welcome",
+      "lifetime_spend_usd": 24.0,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "mc_5510",
+      "brand": "mastercard",
+      "bin": "552233",
+      "auth_result": "approved",
+      "avs": "match"
+    },
+    "device": {
+      "id": "dev_win_k22",
+      "fingerprint": "fp_bonusfarm",
+      "os": "Windows 11",
+      "linked_accounts": ["acc_c03a", "acc_c03b", "acc_c03c", "acc_c03d", "acc_c03e", "acc_c03f"],
+      "ip_country": "US",
+      "ip_city": "Phoenix",
+      "vpn": true
+    },
+    "loyalty": {
+      "points_earned_14d": 18000,
+      "points_redeemed_14d": 16500,
+      "welcome_bonuses": 6,
+      "referrals_14d": 5,
+      "redemptions": [
+        {"sku": "cashback_25", "points": 2500, "days_ago": 1},
+        {"sku": "cashback_25", "points": 2500, "days_ago": 2}
+      ]
+    },
+    "refunds_7d": []
+  },
+  {
+    "id": "CASE-2403",
+    "typology": "card_testing",
+    "title": "Auth spray then a $9.99 digital good",
+    "amount_usd": 9.99,
+    "currency": "USD",
+    "channel": "web",
+    "alerted_at": "2026-08-28T23:02:00Z",
+    "rule_hits": ["auth_fail_burst", "bin_mismatch_geo", "micro_ticket"],
+    "narrative": "Fourteen failed authorizations across five BINs in nine minutes, then one approved $9.99 gift-card purchase from a fresh account.",
+    "account": {
+      "id": "acc_t9",
+      "email": "gift.buyer@protonmail.test",
+      "created_at": "2026-08-28",
+      "age_days": 0,
+      "kyc": "none",
+      "loyalty_tier": "none",
+      "lifetime_spend_usd": 9.99,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "visa_9911",
+      "brand": "visa",
+      "bin": "407220",
+      "auth_result": "approved",
+      "avs": "fail"
+    },
+    "device": {
+      "id": "dev_headless_01",
+      "fingerprint": "fp_headless",
+      "os": "headless-chrome",
+      "linked_accounts": ["acc_t9"],
+      "ip_country": "NL",
+      "ip_city": "Amsterdam",
+      "vpn": true
+    },
+    "velocity": {
+      "auth_attempts_15m": 15,
+      "auth_fails_15m": 14,
+      "unique_bins_15m": 5,
+      "unique_emails_15m": 3
+    },
+    "refunds_7d": []
+  },
+  {
+    "id": "CASE-2404",
+    "typology": "false_positive_travel",
+    "title": "Eight-year customer, hotel folio in Tokyo",
+    "amount_usd": 186.4,
+    "currency": "USD",
+    "channel": "pos",
+    "alerted_at": "2026-08-28T23:18:00Z",
+    "rule_hits": ["new_device", "geo_hop_impossible"],
+    "narrative": "New iPhone enrolled in Tokyo 11 hours after a San Jose login. Account is eight years old, no prior fraud, itinerary matches a known corporate travel card.",
+    "account": {
+      "id": "acc_loyal_01",
+      "email": "priya.raman@meridian.test",
+      "created_at": "2018-03-04",
+      "age_days": 3100,
+      "kyc": "full",
+      "loyalty_tier": "platinum",
+      "lifetime_spend_usd": 84210.0,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "visa_corp_7781",
+      "brand": "visa",
+      "bin": "411111",
+      "auth_result": "approved",
+      "avs": "match"
+    },
+    "device": {
+      "id": "dev_iphone_tokyo",
+      "fingerprint": "fp_priya_new",
+      "os": "iOS 18",
+      "linked_accounts": ["acc_loyal_01"],
+      "ip_country": "JP",
+      "ip_city": "Tokyo",
+      "vpn": false
+    },
+    "travel": {
+      "itinerary_match": true,
+      "home_city": "San Jose",
+      "stated_destination": "Tokyo",
+      "employer_card": true
+    },
+    "refunds_7d": []
+  },
+  {
+    "id": "CASE-2405",
+    "typology": "high_value_mixed",
+    "title": "$1,840 refund, old account, messy device story",
+    "amount_usd": 1840.0,
+    "currency": "USD",
+    "channel": "app",
+    "alerted_at": "2026-08-28T23:41:00Z",
+    "rule_hits": ["high_value_refund", "new_device", "reason_inr"],
+    "narrative": "Five-year customer requested a full refund on a laptop claiming item-not-received. Carrier shows delivered to the lobby. New device this week, no other refunds.",
+    "account": {
+      "id": "acc_mixed_07",
+      "email": "devon.hale@gmail.test",
+      "created_at": "2021-01-19",
+      "age_days": 2048,
+      "kyc": "full",
+      "loyalty_tier": "gold",
+      "lifetime_spend_usd": 9610.0,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "amex_3001",
+      "brand": "amex",
+      "bin": "370000",
+      "auth_result": "approved",
+      "avs": "match"
+    },
+    "device": {
+      "id": "dev_pixel_new_07",
+      "fingerprint": "fp_devon_new",
+      "os": "Android 16",
+      "linked_accounts": ["acc_mixed_07"],
+      "ip_country": "US",
+      "ip_city": "Austin",
+      "vpn": false
+    },
+    "delivery": {"carrier_status": "delivered", "proof": true, "method": "lobby"},
+    "refunds_7d": [
+      {"order_id": "ord_9901", "amount_usd": 1840.0, "reason": "item_not_received", "days_ago": 1}
+    ]
+  },
+  {
+    "id": "CASE-2406",
+    "typology": "promo_stacking",
+    "title": "Welcome bonus plus five self-referrals",
+    "amount_usd": 75.0,
+    "currency": "USD",
+    "channel": "web",
+    "alerted_at": "2026-08-29T00:05:00Z",
+    "rule_hits": ["referral_loop", "same_device_cluster"],
+    "narrative": "Account referred five others from the same fingerprint within 48 hours. Each new account used a plus-addressed email and the same BIN.",
+    "account": {
+      "id": "acc_ref_01",
+      "email": "sam.lee@outlook.test",
+      "created_at": "2026-08-26",
+      "age_days": 3,
+      "kyc": "basic",
+      "loyalty_tier": "welcome",
+      "lifetime_spend_usd": 18.0,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "visa_2200",
+      "brand": "visa",
+      "bin": "414720",
+      "auth_result": "approved",
+      "avs": "partial"
+    },
+    "device": {
+      "id": "dev_pixel8_aa91",
+      "fingerprint": "fp_9c3e",
+      "os": "Android 15",
+      "linked_accounts": ["acc_8f21", "acc_8f44", "acc_ref_01"],
+      "ip_country": "US",
+      "ip_city": "Fresno",
+      "vpn": false
+    },
+    "loyalty": {
+      "points_earned_14d": 9000,
+      "points_redeemed_14d": 0,
+      "welcome_bonuses": 1,
+      "referrals_14d": 5,
+      "redemptions": []
+    },
+    "refunds_7d": []
+  },
+  {
+    "id": "CASE-2407",
+    "typology": "friendly_fraud_inr",
+    "title": "INR claim after porch-photo delivery",
+    "amount_usd": 249.0,
+    "currency": "USD",
+    "channel": "app",
+    "alerted_at": "2026-08-29T00:22:00Z",
+    "rule_hits": ["inr_with_pod", "repeat_inr_reason"],
+    "narrative": "Customer filed item-not-received. Carrier uploaded a porch photo and GPS pin. Same reason code used twice last quarter on other merchants (network label).",
+    "account": {
+      "id": "acc_inr_22",
+      "email": "k.brooks@yahoo.test",
+      "created_at": "2024-11-02",
+      "age_days": 665,
+      "kyc": "full",
+      "loyalty_tier": "silver",
+      "lifetime_spend_usd": 1440.0,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 1
+    },
+    "payment": {
+      "instrument": "visa_6677",
+      "brand": "visa",
+      "bin": "400005",
+      "auth_result": "approved",
+      "avs": "match"
+    },
+    "device": {
+      "id": "dev_iphone_brooks",
+      "fingerprint": "fp_brooks",
+      "os": "iOS 18",
+      "linked_accounts": ["acc_inr_22"],
+      "ip_country": "US",
+      "ip_city": "Columbus",
+      "vpn": false
+    },
+    "delivery": {"carrier_status": "delivered", "proof": true, "method": "porch_photo"},
+    "network_labels": ["repeat_inr_q2", "repeat_inr_q1"],
+    "refunds_7d": [
+      {"order_id": "ord_441", "amount_usd": 249.0, "reason": "item_not_received", "days_ago": 0}
+    ]
+  },
+  {
+    "id": "CASE-2408",
+    "typology": "benign_retry",
+    "title": "First purchase, one decline, then success",
+    "amount_usd": 42.0,
+    "currency": "USD",
+    "channel": "web",
+    "alerted_at": "2026-08-29T00:40:00Z",
+    "rule_hits": ["new_account", "retry_after_decline"],
+    "narrative": "Brand-new customer, issuer soft-declined once for insufficient funds, succeeded on retry with the same PAN. No graph links, no bonus abuse.",
+    "account": {
+      "id": "acc_new_ok",
+      "email": "nina.park@college.test",
+      "created_at": "2026-08-29",
+      "age_days": 0,
+      "kyc": "basic",
+      "loyalty_tier": "none",
+      "lifetime_spend_usd": 42.0,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "visa_student",
+      "brand": "visa",
+      "bin": "414709",
+      "auth_result": "approved",
+      "avs": "match"
+    },
+    "device": {
+      "id": "dev_mac_nina",
+      "fingerprint": "fp_nina",
+      "os": "macOS",
+      "linked_accounts": ["acc_new_ok"],
+      "ip_country": "US",
+      "ip_city": "Ann Arbor",
+      "vpn": false
+    },
+    "velocity": {
+      "auth_attempts_15m": 2,
+      "auth_fails_15m": 1,
+      "unique_bins_15m": 1,
+      "unique_emails_15m": 1
+    },
+    "refunds_7d": []
+  },
+  {
+    "id": "CASE-2409",
+    "typology": "account_takeover",
+    "title": "Password reset, new device, then a refund",
+    "amount_usd": 620.0,
+    "currency": "USD",
+    "channel": "app",
+    "alerted_at": "2026-08-29T01:01:00Z",
+    "rule_hits": ["password_reset", "email_change", "new_device", "refund_after_ato"],
+    "narrative": "Email changed at 00:11, password reset at 00:14 from a Nigerian IP, refund requested at 00:48 against a 2019 account with a clean history.",
+    "account": {
+      "id": "acc_ato_19",
+      "email": "new.owner@tempmail.test",
+      "created_at": "2019-06-11",
+      "age_days": 2636,
+      "kyc": "full",
+      "loyalty_tier": "gold",
+      "lifetime_spend_usd": 12100.0,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "visa_stored_19",
+      "brand": "visa",
+      "bin": "424242",
+      "auth_result": "approved",
+      "avs": "unavailable"
+    },
+    "device": {
+      "id": "dev_ato_ng",
+      "fingerprint": "fp_ato_fresh",
+      "os": "Android 12",
+      "linked_accounts": ["acc_ato_19"],
+      "ip_country": "NG",
+      "ip_city": "Lagos",
+      "vpn": true
+    },
+    "ato": {
+      "password_reset": true,
+      "email_changed": true,
+      "hours_since_reset": 0.5,
+      "impossible_travel": true
+    },
+    "refunds_7d": [
+      {"order_id": "ord_old_88", "amount_usd": 620.0, "reason": "changed_mind", "days_ago": 0}
+    ]
+  },
+  {
+    "id": "CASE-2410",
+    "typology": "household_loyalty",
+    "title": "Family sharing points across three logins",
+    "amount_usd": 40.0,
+    "currency": "USD",
+    "channel": "app",
+    "alerted_at": "2026-08-29T01:16:00Z",
+    "rule_hits": ["shared_device_loyalty", "multi_login_home"],
+    "narrative": "Three accounts (spouse + teen + primary) redeeming points from one living-room Apple TV. Policy is unclear whether household pooling is allowed.",
+    "account": {
+      "id": "acc_house_a",
+      "email": "morgan.quinn@meridian.test",
+      "created_at": "2017-09-01",
+      "age_days": 3284,
+      "kyc": "full",
+      "loyalty_tier": "platinum",
+      "lifetime_spend_usd": 22040.0,
+      "prior_fraud_cases": 0,
+      "chargebacks_90d": 0
+    },
+    "payment": {
+      "instrument": "visa_house",
+      "brand": "visa",
+      "bin": "411111",
+      "auth_result": "approved",
+      "avs": "match"
+    },
+    "device": {
+      "id": "dev_appletv_living",
+      "fingerprint": "fp_livingroom",
+      "os": "tvOS",
+      "linked_accounts": ["acc_house_a", "acc_house_b", "acc_house_c"],
+      "ip_country": "US",
+      "ip_city": "Portland",
+      "vpn": false
+    },
+    "loyalty": {
+      "points_earned_14d": 2400,
+      "points_redeemed_14d": 2100,
+      "welcome_bonuses": 0,
+      "referrals_14d": 0,
+      "redemptions": [
+        {"sku": "streaming_month", "points": 700, "days_ago": 1}
+      ]
+    },
+    "household": {
+      "shared_ssid": true,
+      "stated_family": true,
+      "policy_allows_pooling": null
+    },
+    "refunds_7d": []
+  }
+]

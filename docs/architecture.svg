@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" width="1100" height="640" role="img" aria-label="Night Desk architecture">
+  <rect width="1100" height="640" fill="#0b0d0c"/>
+  <text x="40" y="42" fill="#c8f542" font-family="ui-monospace, monospace" font-size="16" letter-spacing="3">NIGHT DESK</text>
+  <text x="40" y="66" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="14">Overnight refund / loyalty / payment-abuse triage · Taskmaster track</text>
+
+  <!-- Ingest -->
+  <rect x="40" y="100" width="220" height="120" rx="10" fill="#141a16" stroke="#3f4a3e"/>
+  <text x="56" y="128" fill="#c8f542" font-family="ui-monospace, monospace" font-size="12">INGEST</text>
+  <text x="56" y="154" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">Sample cases.json</text>
+  <text x="56" y="176" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">or Pub/Sub topic</text>
+  <text x="56" y="198" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">nightdesk-shifts</text>
+
+  <!-- API -->
+  <rect x="300" y="100" width="240" height="120" rx="10" fill="#141a16" stroke="#3f4a3e"/>
+  <text x="316" y="128" fill="#c8f542" font-family="ui-monospace, monospace" font-size="12">CLOUD RUN / FASTAPI</text>
+  <text x="316" y="154" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">POST /api/shifts  (goal)</text>
+  <text x="316" y="176" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">SSE /api/shifts/{id}/events</text>
+  <text x="316" y="198" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">Ops console (Next.js)</text>
+
+  <!-- Agent -->
+  <rect x="580" y="88" width="480" height="280" rx="10" fill="#101410" stroke="#c8f542" stroke-opacity="0.5"/>
+  <text x="596" y="116" fill="#c8f542" font-family="ui-monospace, monospace" font-size="12">GOOGLE ADK  ·  GEMINI 3.5 FLASH</text>
+  <text x="596" y="140" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">Shift boss takes the goal, plans, works every OPEN case</text>
+
+  <rect x="600" y="160" width="200" height="70" rx="8" fill="#1a221c" stroke="#3f4a3e"/>
+  <text x="616" y="188" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">1. Plan</text>
+  <text x="616" y="210" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">claim ’ gather ’ note</text>
+
+  <rect x="820" y="160" width="220" height="70" rx="8" fill="#1a221c" stroke="#3f4a3e"/>
+  <text x="836" y="188" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">2. Tools</text>
+  <text x="836" y="210" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">case, graph, velocity, loyalty</text>
+
+  <rect x="600" y="250" width="200" height="70" rx="8" fill="#1a221c" stroke="#3f4a3e"/>
+  <text x="616" y="278" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">3. Write case note</text>
+  <text x="616" y="300" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">evidence + confidence</text>
+
+  <rect x="820" y="250" width="220" height="70" rx="8" fill="#1a221c" stroke="#3f4a3e"/>
+  <text x="836" y="278" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">4. Policy guard</text>
+  <text x="836" y="300" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">deterministic last word</text>
+
+  <!-- Data -->
+  <rect x="40" y="280" width="500" height="160" rx="10" fill="#141a16" stroke="#3f4a3e"/>
+  <text x="56" y="308" fill="#c8f542" font-family="ui-monospace, monospace" font-size="12">GOOGLE CLOUD</text>
+  <rect x="56" y="328" width="220" height="88" rx="8" fill="#1a221c" stroke="#3f4a3e"/>
+  <text x="72" y="360" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">Firestore</text>
+  <text x="72" y="382" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">cases · notes · shifts</text>
+  <rect x="296" y="328" width="220" height="88" rx="8" fill="#1a221c" stroke="#3f4a3e"/>
+  <text x="312" y="360" fill="#e8eee6" font-family="ui-sans-serif, system-ui" font-size="13">Pub/Sub</text>
+  <text x="312" y="382" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="12">shift-started events</text>
+
+  <!-- Outcomes -->
+  <rect x="40" y="480" width="320" height="120" rx="10" fill="#102016" stroke="#3f6a3e"/>
+  <text x="56" y="508" fill="#86efac" font-family="ui-sans-serif, system-ui" font-size="14">AUTO_CLOSE</text>
+  <text x="56" y="532" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="13">Loyal traveler, benign retry.</text>
+  <text x="56" y="554" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="13">No human in the morning.</text>
+
+  <rect x="380" y="480" width="340" height="120" rx="10" fill="#201810" stroke="#6a4a2e"/>
+  <text x="396" y="508" fill="#fdba74" font-family="ui-sans-serif, system-ui" font-size="14">AUTO_ESCALATE</text>
+  <text x="396" y="532" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="13">Refund rings, loyalty farms,</text>
+  <text x="396" y="554" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="13">card testing, ATO + refund.</text>
+
+  <rect x="740" y="480" width="320" height="120" rx="10" fill="#201c10" stroke="#6a5a20"/>
+  <text x="756" y="508" fill="#fde68a" font-family="ui-sans-serif, system-ui" font-size="14">HUMAN INBOX</text>
+  <text x="756" y="532" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="13">High-value mixed signals,</text>
+  <text x="756" y="554" fill="#8a9388" font-family="ui-sans-serif, system-ui" font-size="13">household policy gaps only.</text>
+
+  <!-- arrows -->
+  <path d="M260 160 H300" stroke="#c8f542" stroke-width="1.5" fill="none"/>
+  <path d="M540 160 H580" stroke="#c8f542" stroke-width="1.5" fill="none"/>
+  <path d="M420 220 V280" stroke="#8a9388" stroke-width="1.2" fill="none"/>
+  <path d="M820 368 V480" stroke="#8a9388" stroke-width="1.2" fill="none"/>
+  <path d="M200 440 V480" stroke="#8a9388" stroke-width="1.2" fill="none"/>
+  <path d="M550 440 V480" stroke="#8a9388" stroke-width="1.2" fill="none"/>
+</svg>

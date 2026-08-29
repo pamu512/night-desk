@@ -1,0 +1,3 @@
+"""Night Desk — autonomous overnight fraud-ops triage agent."""
+
+__version__ = "1.0.0"

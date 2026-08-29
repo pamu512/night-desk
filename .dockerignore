@@ -1,0 +1,13 @@
+.venv
+.git
+web/node_modules
+web/.next
+web/out
+data
+**/__pycache__
+**/.pytest_cache
+agent-tools
+.env
+.env.local
+*.md
+!README.md
