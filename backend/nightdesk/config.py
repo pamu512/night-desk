@@ -13,20 +13,35 @@ DATA_DIR = Path(os.getenv("NIGHTDESK_DATA_DIR", ROOT / "data"))
 
 APP_NAME = "nightdesk"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
-GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "tarka-505801")
-GOOGLE_CLOUD_LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 PUBSUB_TOPIC = os.getenv("PUBSUB_TOPIC", "nightdesk-shifts")
 FIRESTORE_COLLECTION = os.getenv("FIRESTORE_COLLECTION", "nightdesk")
-
-# Vertex when explicitly requested; otherwise Gemini API (AI Studio key).
-USE_VERTEX = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "false").lower() in {"1", "true", "yes"}
+GOOGLE_CLOUD_LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 HOST = os.getenv("NIGHTDESK_HOST", "0.0.0.0")
 PORT = int(os.getenv("NIGHTDESK_PORT", "43148"))
 
 
+def google_cloud_project() -> str:
+    """Empty unless the operator exports GOOGLE_CLOUD_PROJECT. No baked project id."""
+    return (os.getenv("GOOGLE_CLOUD_PROJECT") or "").strip()
+
+
+def use_vertex() -> bool:
+    raw = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+    return raw.lower() in {"1", "true", "yes"}
+
+
+def has_adc() -> bool:
+    """Real ADC only: existing credentials file or Cloud Run metadata. Not a project string."""
+    creds = (os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
+    if creds and Path(creds).is_file():
+        return True
+    if os.getenv("K_SERVICE"):
+        return True
+    return False
+
+
 def has_gemini() -> bool:
-    if USE_VERTEX:
-        return bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GOOGLE_CLOUD_PROJECT"))
-    return bool(GOOGLE_API_KEY)
+    """Vertex + ADC. A project id or consumer API key does not mark the rail up."""
+    return use_vertex() and has_adc()
+

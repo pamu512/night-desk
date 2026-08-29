@@ -30,9 +30,8 @@ def publish_shift_started(shift_id: str, goal: str, case_ids: list[str]) -> str 
 
     live = bool(
         os.getenv("PUBSUB_EMULATOR_HOST")
-        or os.getenv("K_SERVICE")
-        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         or os.getenv("NIGHTDESK_FORCE_PUBSUB") == "1"
+        or config.has_adc()
     )
     if not live:
         _local_log.append({**payload, "fallback": "no emulator, Cloud Run, or ADC"})
@@ -40,8 +39,13 @@ def publish_shift_started(shift_id: str, goal: str, case_ids: list[str]) -> str 
         return None
 
     try:
+        project = config.google_cloud_project()
+        if not project:
+            _local_log.append({**payload, "fallback": "GOOGLE_CLOUD_PROJECT unset"})
+            log.warning("Pub/Sub skipped: GOOGLE_CLOUD_PROJECT unset")
+            return None
         publisher = pubsub_v1.PublisherClient()
-        topic_path = publisher.topic_path(config.GOOGLE_CLOUD_PROJECT, config.PUBSUB_TOPIC)
+        topic_path = publisher.topic_path(project, config.PUBSUB_TOPIC)
         try:
             publisher.create_topic(request={"name": topic_path})
         except Exception:
@@ -61,9 +65,8 @@ def pubsub_live() -> bool:
 
     return bool(
         os.getenv("PUBSUB_EMULATOR_HOST")
-        or os.getenv("K_SERVICE")
-        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         or os.getenv("NIGHTDESK_FORCE_PUBSUB") == "1"
+        or config.has_adc()
     )
 
 

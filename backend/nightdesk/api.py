@@ -67,10 +67,10 @@ def health() -> dict[str, Any]:
         "service": "nightdesk",
         "gemini": config.has_gemini(),
         "model": config.GEMINI_MODEL,
-        "vertex": config.USE_VERTEX,
+        "vertex": config.use_vertex(),
         "store": store.backend,
         "store_fallback": store.fallback_reason,
-        "project": config.GOOGLE_CLOUD_PROJECT,
+        "project": config.google_cloud_project(),
         "pubsub_topic": config.PUBSUB_TOPIC,
         "rails": {
             "present": rails.present,

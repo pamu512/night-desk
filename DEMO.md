@@ -14,7 +14,7 @@ Do not say the pile will shrink. Do not preview an inbox of two.
 
 > Gemini writes the note. `decide()` stamps HOLD or ESCALATE. If Gemini, Vertex, or Pub/Sub is down, everything HOLDs. First-open is that receipt — why, present, missing — still on the row.
 
-Point at the rail badges (gemini missing / pubsub missing on a local box).
+Point at the rail badges (vertex missing / pubsub missing on a local box).
 
 ## 1:00–2:30 · Live run
 

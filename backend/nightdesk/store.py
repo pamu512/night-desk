@@ -47,14 +47,15 @@ class CaseStore:
             log.info("Firestore client imported; using file store until ADC/emulator is present")
             return
         try:
-            self._client = firestore.Client(project=config.GOOGLE_CLOUD_PROJECT)
+            project = config.google_cloud_project() or None
+            self._client = firestore.Client(project=project) if project else firestore.Client()
             ping = (
                 self._client.collection(config.FIRESTORE_COLLECTION)
                 .document("_health")
             )
             ping.set({"ok": True, "service": "nightdesk"}, merge=True)
             self.backend = "firestore"
-            log.info("Firestore connected project=%s", config.GOOGLE_CLOUD_PROJECT)
+            log.info("Firestore connected project=%s", project or "(adc)")
         except Exception as exc:  # noqa: BLE001
             self._client = None
             self.backend = "memory"

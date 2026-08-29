@@ -1,5 +1,5 @@
 # Cloud Run image: Next.js static console + FastAPI agent.
-# Scale to zero. Do not bake GOOGLE_API_KEY into the image.
+# Scale to zero. Vertex + ADC at runtime. Do not bake project ids or keys.
 
 FROM node:22-bookworm-slim AS web
 WORKDIR /web
@@ -18,7 +18,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     NIGHTDESK_STATIC=/app/web/out \
     NIGHTDESK_HOST=0.0.0.0 \
     NIGHTDESK_PORT=8080 \
-    GEMINI_MODEL=gemini-3.5-flash
+    GEMINI_MODEL=gemini-3.5-flash \
+    GOOGLE_GENAI_USE_VERTEXAI=true
 
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt

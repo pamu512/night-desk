@@ -56,7 +56,7 @@ Diagram: [`docs/architecture.svg`](docs/architecture.svg).
 
 ## How to run locally
 
-Python 3.11+ and Node 20+. No secrets. Locally Gemini and Pub/Sub are missing → every receipt is fail-closed HOLD. That is the demo.
+Python 3.11+ and Node 20+. No secrets. Locally Vertex and Pub/Sub are missing → every receipt is fail-closed HOLD. That is the demo.
 
 ```bash
 cp .env.example .env
@@ -108,10 +108,10 @@ Serves API + static console on `43148`.
 
 ## Deploy to Cloud Run
 
-Project in this write-up: `tarka-505801` (GCP project id). Do not bake keys.
+Vertex + ADC. Export `YOUR_GCP_PROJECT`. Do not bake keys or a project id into the image. The consumer Gemini API key path is not used (HK-blocked).
 
 ```bash
-export PROJECT_ID=tarka-505801
+export PROJECT_ID=YOUR_GCP_PROJECT
 export REGION=us-central1
 
 gcloud config set project $PROJECT_ID
@@ -120,32 +120,28 @@ gcloud services enable run.googleapis.com firestore.googleapis.com pubsub.google
 gcloud firestore databases create --location=$REGION || true
 gcloud pubsub topics create nightdesk-shifts || true
 
-echo -n "$GOOGLE_API_KEY" | gcloud secrets create gemini-api-key --data-file=- || true
-
 gcloud run deploy nightdesk \
   --source . \
   --region $REGION \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances 2 \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GEMINI_MODEL=gemini-3.5-flash,PUBSUB_TOPIC=nightdesk-shifts,GOOGLE_GENAI_USE_VERTEXAI=false" \
-  --set-secrets "GOOGLE_API_KEY=gemini-api-key:latest"
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=$REGION,GEMINI_MODEL=gemini-3.5-flash,PUBSUB_TOPIC=nightdesk-shifts,GOOGLE_GENAI_USE_VERTEXAI=true"
 ```
 
-Scale to zero. After a live GCP proof, delete the service.
+The Cloud Run service account needs `roles/aiplatform.user`, Firestore, and Pub/Sub. ADC is the metadata server — no consumer API key. If Vertex or Pub/Sub is down, HOLD.
 
-Vertex path: `GOOGLE_GENAI_USE_VERTEXAI=true` and `roles/aiplatform.user` on the runtime SA. If Vertex is down, HOLD.
+Scale to zero. After a live GCP proof, delete the service.
 
 ## Environment variables
 
 | Variable | Purpose |
 |---|---|
-| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Gemini API (AI Studio) |
-| `GEMINI_MODEL` | Default `gemini-3.5-flash` |
-| `GOOGLE_GENAI_USE_VERTEXAI` | `true` to use Vertex |
-| `GOOGLE_CLOUD_PROJECT` | GCP project |
+| `GOOGLE_GENAI_USE_VERTEXAI` | Default `true`. Vertex is the model rail. |
+| `GOOGLE_CLOUD_PROJECT` | Operator export only. Empty if unset. Use `YOUR_GCP_PROJECT`. |
 | `GOOGLE_CLOUD_LOCATION` | Vertex / Cloud Run region |
-| `GOOGLE_APPLICATION_CREDENTIALS` | ADC JSON |
+| `GOOGLE_APPLICATION_CREDENTIALS` | ADC JSON locally; Cloud Run uses the runtime SA |
+| `GEMINI_MODEL` | Default `gemini-3.5-flash` |
 | `FIRESTORE_EMULATOR_HOST` | Firestore emulator |
 | `PUBSUB_EMULATOR_HOST` | Pub/Sub emulator |
 | `PUBSUB_TOPIC` | Default `nightdesk-shifts` |
