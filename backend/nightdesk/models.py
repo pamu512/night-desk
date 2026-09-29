@@ -92,6 +92,7 @@ class CaseRecord(BaseModel):
     final_disposition: Disposition | None = None
     policy_override: bool = False
     shift_id: str | None = None
+    claimed_at: str | None = None
 
 
 class TraceEvent(BaseModel):
