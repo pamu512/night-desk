@@ -106,6 +106,7 @@ async def run_shift(goal: str, *, force_mock: bool = False, shift: ShiftRecord |
         gemini_up=use_gemini,
     )
     case_ids = list(shift.case_ids)
+    rivals = store.live_shift_ids(except_id=shift_id)
     bus.emit(
         shift_id,
         agent="shift_boss",
@@ -119,6 +120,17 @@ async def run_shift(goal: str, *, force_mock: bool = False, shift: ShiftRecord |
 
     try:
         for case_id in case_ids:
+            claimed = store.claim_case(case_id, shift_id, rivals=rivals)
+            if claimed is None:
+                log.info("skip %s — claimed by another shift", case_id)
+                bus.emit(
+                    shift_id,
+                    agent="shift_boss",
+                    kind="info",
+                    case_id=case_id,
+                    message=f"skip {case_id}: claimed by another live shift",
+                )
+                continue
             current_case_id.set(case_id)
             case, case_rails = await _investigate(case_id, shift_id, use_gemini, rails)
             _stamp(case, shift_id, case_rails)

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
+import threading
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,7 @@ class CaseStore:
         self._mem_cases: dict[str, dict[str, Any]] = {}
         self._mem_shifts: dict[str, dict[str, Any]] = {}
         self._client = None
+        self._lock = threading.Lock()
         self._connect_firestore()
         if self.backend != "firestore":
             self._load_file()
@@ -81,9 +84,20 @@ class CaseStore:
     def _save_file(self) -> None:
         if self.backend == "firestore":
             return
-        self._file().write_text(
-            json.dumps({"cases": self._mem_cases, "shifts": self._mem_shifts}, indent=2)
-        )
+        path = self._file()
+        payload = json.dumps({"cases": self._mem_cases, "shifts": self._mem_shifts}, indent=2)
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".store-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+                handle.flush()
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
     def upsert_case(self, case: CaseRecord) -> CaseRecord:
         payload = case.model_dump()
@@ -141,6 +155,48 @@ class CaseStore:
             rows = [ShiftRecord.model_validate(v) for v in self._mem_shifts.values()]
         rows.sort(key=lambda s: s.started_at, reverse=True)
         return rows
+
+    def live_shift_ids(self, except_id: str | None = None) -> set[str]:
+        return {s.id for s in self.list_shifts() if s.status == "running" and s.id != except_id}
+
+    def _claim_blocked(self, case: CaseRecord, shift_id: str, rivals: set[str] | None) -> bool:
+        holder = case.shift_id
+        if not holder or holder == shift_id:
+            return False
+        if rivals and holder in rivals:
+            return True
+        other = self.get_shift(holder)
+        return other is not None and other.status == "running"
+
+    def claim_case(
+        self, case_id: str, shift_id: str, *, rivals: set[str] | None = None
+    ) -> CaseRecord | None:
+        """Atomically claim a case for this shift. None if another live/rival shift holds it."""
+        with self._lock:
+            if self.backend == "firestore" and self._client is not None:
+                return self._claim_case_firestore(case_id, shift_id, rivals)
+            case = self.get_case(case_id)
+            if case is None or self._claim_blocked(case, shift_id, rivals):
+                return None
+            case.status = "processing"
+            case.shift_id = shift_id
+            self._mem_cases[case.id] = case.model_dump()
+            self._save_file()
+            return case
+
+    def _claim_case_firestore(
+        self, case_id: str, shift_id: str, rivals: set[str] | None
+    ) -> CaseRecord | None:
+        snap = self._col("cases").document(case_id).get()
+        if not snap.exists:
+            return None
+        case = CaseRecord.model_validate(snap.to_dict())
+        if self._claim_blocked(case, shift_id, rivals):
+            return None
+        case.status = "processing"
+        case.shift_id = shift_id
+        self._col("cases").document(case_id).set(case.model_dump())
+        return case
 
     def replace_cases(self, cases: list[CaseRecord]) -> None:
         if self.backend == "firestore" and self._client is not None:

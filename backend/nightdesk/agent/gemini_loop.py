@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from nightdesk import config
@@ -43,29 +44,38 @@ async def investigate_case_gemini(case_id: str, shift_id: str) -> CaseRecord:
         message=f"Gemini {config.GEMINI_MODEL} investigating {case_id}",
     )
     content = types.Content(role="user", parts=[types.Part(text=prompt)])
-    async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
-        text = ""
-        if getattr(event, "content", None) and event.content.parts:
-            text = "".join(p.text or "" for p in event.content.parts if getattr(p, "text", None))
-        if text:
-            bus.emit(
-                shift_id,
-                agent="shift_boss",
-                kind="info",
-                case_id=case_id,
-                message=text[:400],
-            )
-        fn = getattr(event, "get_function_calls", None)
-        if callable(fn):
-            for call in fn() or []:
+    timeout = config.gemini_investigate_timeout()
+
+    async def _consume() -> None:
+        async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
+            text = ""
+            if getattr(event, "content", None) and event.content.parts:
+                text = "".join(p.text or "" for p in event.content.parts if getattr(p, "text", None))
+            if text:
                 bus.emit(
                     shift_id,
                     agent="shift_boss",
-                    kind="tool",
+                    kind="info",
                     case_id=case_id,
-                    message=f"Gemini called {call.name}",
-                    data={"args": getattr(call, "args", {}) or {}},
+                    message=text[:400],
                 )
+            fn = getattr(event, "get_function_calls", None)
+            if callable(fn):
+                for call in fn() or []:
+                    bus.emit(
+                        shift_id,
+                        agent="shift_boss",
+                        kind="tool",
+                        case_id=case_id,
+                        message=f"Gemini called {call.name}",
+                        data={"args": getattr(call, "args", {}) or {}},
+                    )
+
+    try:
+        await asyncio.wait_for(_consume(), timeout=timeout)
+    except TimeoutError:
+        log.error("Gemini investigate timed out for %s after %.1fs", case_id, timeout)
+        raise
 
     refreshed = store.get_case(case_id)
     if refreshed is None:

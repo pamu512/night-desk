@@ -54,3 +54,18 @@ def shift_token() -> str:
 def shifts_enabled() -> bool:
     return bool(shift_token())
 
+
+_DEFAULT_GEMINI_TIMEOUT_SEC = 180.0
+
+
+def gemini_investigate_timeout() -> float:
+    """Seconds to wait on a Gemini investigate stream before fail-closed fallback."""
+    raw = (os.getenv("NIGHTDESK_GEMINI_TIMEOUT") or "").strip()
+    try:
+        value = float(raw) if raw else _DEFAULT_GEMINI_TIMEOUT_SEC
+    except ValueError:
+        return _DEFAULT_GEMINI_TIMEOUT_SEC
+    if value <= 0:
+        return _DEFAULT_GEMINI_TIMEOUT_SEC
+    return value
+
