@@ -80,8 +80,10 @@ async def test_concurrent_run_shifts_do_not_double_process(monkeypatch) -> None:
     from nightdesk.agent import shift as shift_mod
 
     real = shift_mod._investigate
+    seen: list[tuple[str, str]] = []
 
     async def slow(case_id: str, shift_id: str, use_gemini: bool, rails: Rails):
+        seen.append((case_id, shift_id))
         await asyncio.sleep(0.02)
         return await real(case_id, shift_id, use_gemini, rails)
 
@@ -90,10 +92,40 @@ async def test_concurrent_run_shifts_do_not_double_process(monkeypatch) -> None:
         run_shift("first", force_mock=True),
         run_shift("second", force_mock=True),
     )
+    assert len(seen) == 10
+    assert len({case_id for case_id, _ in seen}) == 10
     assert first.counts["processed"] + second.counts["processed"] == 10
     owners = {c.shift_id for c in store.list_cases()}
     assert owners <= {first.id, second.id}
     assert None not in owners
+
+
+def test_failed_shift_releases_claim() -> None:
+    reset_queue()
+    holder = open_shift("failed-holder", force_mock=True)
+    case_id = store.list_cases()[0].id
+    assert store.claim_case(case_id, holder.id) is not None
+    holder.status = "failed"
+    store.upsert_shift(holder)
+    other = open_shift("reclaimer", force_mock=True)
+    claimed = store.claim_case(case_id, other.id, rivals={holder.id})
+    assert claimed is not None
+    assert claimed.shift_id == other.id
+
+
+def test_stale_claim_is_reclaimable() -> None:
+    reset_queue()
+    holder = open_shift("stale-holder", force_mock=True)
+    case_id = store.list_cases()[0].id
+    assert store.claim_case(case_id, holder.id) is not None
+    held = store.get_case(case_id)
+    assert held is not None
+    held.claimed_at = "2000-01-01T00:00:00+00:00"
+    store.upsert_case(held)
+    other = open_shift("reclaimer", force_mock=True)
+    claimed = store.claim_case(case_id, other.id)
+    assert claimed is not None
+    assert claimed.shift_id == other.id
 
 
 def test_save_file_uses_atomic_replace(monkeypatch) -> None:

@@ -56,16 +56,24 @@ def shifts_enabled() -> bool:
 
 
 _DEFAULT_GEMINI_TIMEOUT_SEC = 180.0
+_DEFAULT_CLAIM_TTL_SEC = 900.0
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    raw = (os.getenv(name) or "").strip()
+    try:
+        value = float(raw) if raw else default
+    except ValueError:
+        return default
+    return value if value > 0 else default
 
 
 def gemini_investigate_timeout() -> float:
     """Seconds to wait on a Gemini investigate stream before fail-closed fallback."""
-    raw = (os.getenv("NIGHTDESK_GEMINI_TIMEOUT") or "").strip()
-    try:
-        value = float(raw) if raw else _DEFAULT_GEMINI_TIMEOUT_SEC
-    except ValueError:
-        return _DEFAULT_GEMINI_TIMEOUT_SEC
-    if value <= 0:
-        return _DEFAULT_GEMINI_TIMEOUT_SEC
-    return value
+    return _positive_float_env("NIGHTDESK_GEMINI_TIMEOUT", _DEFAULT_GEMINI_TIMEOUT_SEC)
+
+
+def claim_ttl_seconds() -> float:
+    """How long a processing claim pins a case when the holder still looks running."""
+    return _positive_float_env("NIGHTDESK_CLAIM_TTL", _DEFAULT_CLAIM_TTL_SEC)
 

@@ -199,7 +199,9 @@ def mark_case_processing(case_id: str) -> dict[str, Any]:
     """Claim a case so a second worker does not pick it up."""
     if store.get_case(case_id) is None:
         return {"status": "error", "message": f"unknown case {case_id}"}
-    shift_id = current_shift_id.get() or ""
+    shift_id = current_shift_id.get()
+    if not shift_id:
+        return {"status": "error", "message": "no shift context"}
     claimed = store.claim_case(case_id, shift_id)
     if claimed is None:
         return {"status": "error", "message": f"case {case_id} already claimed"}

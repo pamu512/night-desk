@@ -6,11 +6,12 @@ import os
 import tempfile
 import threading
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from nightdesk import config
-from nightdesk.models import CaseRecord, ShiftRecord
+from nightdesk.models import CaseRecord, ShiftRecord, utcnow
 
 log = logging.getLogger("nightdesk.store")
 
@@ -159,14 +160,37 @@ class CaseStore:
     def live_shift_ids(self, except_id: str | None = None) -> set[str]:
         return {s.id for s in self.list_shifts() if s.status == "running" and s.id != except_id}
 
+    def _claim_stale(self, case: CaseRecord) -> bool:
+        if not case.claimed_at:
+            return False
+        try:
+            claimed = datetime.fromisoformat(case.claimed_at)
+        except ValueError:
+            return True
+        if claimed.tzinfo is None:
+            claimed = claimed.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - claimed).total_seconds()
+        return age > config.claim_ttl_seconds()
+
     def _claim_blocked(self, case: CaseRecord, shift_id: str, rivals: set[str] | None) -> bool:
         holder = case.shift_id
         if not holder or holder == shift_id:
             return False
-        if rivals and holder in rivals:
-            return True
+        if self._claim_stale(case):
+            return False
         other = self.get_shift(holder)
-        return other is not None and other.status == "running"
+        if other is None or other.status == "failed":
+            return False
+        if other.status == "running":
+            return True
+        # Overlapping sibling already finished — do not re-process its cases.
+        return bool(rivals and holder in rivals)
+
+    def _take_claim(self, case: CaseRecord, shift_id: str) -> CaseRecord:
+        case.status = "processing"
+        case.shift_id = shift_id
+        case.claimed_at = utcnow()
+        return case
 
     def claim_case(
         self, case_id: str, shift_id: str, *, rivals: set[str] | None = None
@@ -178,8 +202,7 @@ class CaseStore:
             case = self.get_case(case_id)
             if case is None or self._claim_blocked(case, shift_id, rivals):
                 return None
-            case.status = "processing"
-            case.shift_id = shift_id
+            case = self._take_claim(case, shift_id)
             self._mem_cases[case.id] = case.model_dump()
             self._save_file()
             return case
@@ -187,16 +210,24 @@ class CaseStore:
     def _claim_case_firestore(
         self, case_id: str, shift_id: str, rivals: set[str] | None
     ) -> CaseRecord | None:
-        snap = self._col("cases").document(case_id).get()
-        if not snap.exists:
-            return None
-        case = CaseRecord.model_validate(snap.to_dict())
-        if self._claim_blocked(case, shift_id, rivals):
-            return None
-        case.status = "processing"
-        case.shift_id = shift_id
-        self._col("cases").document(case_id).set(case.model_dump())
-        return case
+        from google.cloud import firestore
+
+        ref = self._col("cases").document(case_id)
+        transaction = self._client.transaction()
+
+        @firestore.transactional
+        def _txn(txn: Any) -> CaseRecord | None:
+            snap = ref.get(transaction=txn)
+            if not snap.exists:
+                return None
+            case = CaseRecord.model_validate(snap.to_dict())
+            if self._claim_blocked(case, shift_id, rivals):
+                return None
+            case = self._take_claim(case, shift_id)
+            txn.set(ref, case.model_dump())
+            return case
+
+        return _txn(transaction)
 
     def replace_cases(self, cases: list[CaseRecord]) -> None:
         if self.backend == "firestore" and self._client is not None:

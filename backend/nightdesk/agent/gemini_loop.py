@@ -45,9 +45,10 @@ async def investigate_case_gemini(case_id: str, shift_id: str) -> CaseRecord:
     )
     content = types.Content(role="user", parts=[types.Part(text=prompt)])
     timeout = config.gemini_investigate_timeout()
+    stream = runner.run_async(user_id=user_id, session_id=session_id, new_message=content)
 
     async def _consume() -> None:
-        async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
+        async for event in stream:
             text = ""
             if getattr(event, "content", None) and event.content.parts:
                 text = "".join(p.text or "" for p in event.content.parts if getattr(p, "text", None))
@@ -75,6 +76,12 @@ async def investigate_case_gemini(case_id: str, shift_id: str) -> CaseRecord:
         await asyncio.wait_for(_consume(), timeout=timeout)
     except TimeoutError:
         log.error("Gemini investigate timed out for %s after %.1fs", case_id, timeout)
+        closer = getattr(stream, "aclose", None)
+        if callable(closer):
+            try:
+                await asyncio.wait_for(closer(), timeout=1)
+            except Exception:  # noqa: BLE001
+                pass
         raise
 
     refreshed = store.get_case(case_id)
